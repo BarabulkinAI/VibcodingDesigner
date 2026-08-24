@@ -14,7 +14,8 @@ public static class BuildServiceProvider
 
         // Регистрация сервисов
         services.AddSingleton<IFastReportService, FastReportService>();
-        services.AddSingleton<IPreviewService, PreviewService >();
+        services.AddSingleton<IPreviewService, PreviewService>();
+        services.AddSingleton<IExportService, ExportService>();
         // services.AddSingleton<IMyService, MyService>();
         // services.AddTransient<IMyTransientService, MyTransientService>();
 
