@@ -26,7 +26,7 @@ public static class DesignSnapshotBuilder
     {
         var bands = new List<BandSnapshot>();
         var topPx = 0f;
-        foreach (BandBase band in page.Bands)
+        foreach (BandBase band in EnumerateBands(page))
         {
             var heightPx = ToPx(band.Height);
             bands.Add(new BandSnapshot
@@ -43,10 +43,28 @@ public static class DesignSnapshotBuilder
         return new PageSnapshot
         {
             Name = page.Name,
-            Width = ToPx(page.PaperWidth),
-            Height = ToPx(page.PaperHeight),
+            Width = UnitConverter.MmToPx(page.PaperWidth),
+            Height = UnitConverter.MmToPx(page.PaperHeight),
             Bands = bands,
         };
+    }
+
+    /// <summary>
+    /// Возвращает все полосы страницы в вертикальном порядке отображения.
+    /// Специальные полосы хранятся в отдельных свойствах <see cref="ReportPage"/>,
+    /// а data/group полосы — в коллекции <see cref="ReportPage.Bands"/>.
+    /// </summary>
+    private static IEnumerable<BandBase> EnumerateBands(ReportPage page)
+    {
+        if (page.ReportTitle != null) yield return page.ReportTitle;
+        if (page.PageHeader != null) yield return page.PageHeader;
+        if (page.ColumnHeader != null) yield return page.ColumnHeader;
+        foreach (BandBase band in page.Bands)
+            yield return band;
+        if (page.ReportSummary != null) yield return page.ReportSummary;
+        if (page.ColumnFooter != null) yield return page.ColumnFooter;
+        if (page.PageFooter != null) yield return page.PageFooter;
+        if (page.Overlay != null) yield return page.Overlay;
     }
 
     private static List<DesignObjectInfo> BuildObjects(BandBase band)
@@ -87,8 +105,8 @@ public static class DesignSnapshotBuilder
             Type = DesignObjectType.Line,
             Bounds = ToBoundsPx(l),
             Visible = l.Visible,
-            LineWidth = l.Width,
-            LineColor = l.FillColor,
+            LineWidth = l.Border?.Width ?? 1,
+            LineColor = l.Border?.Color ?? Color.Black,
         },
         ShapeObject s => new DesignObjectInfo
         {

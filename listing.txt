@@ -1,4 +1,0 @@
-﻿        <member name="T:FastReport.Barcode.PDF417ErrorCorrection">
-        <member name="T:FastReport.Barcode.PDF417CompactionMode">
-        <member name="T:FastReport.Barcode.BarcodePDF417">
-            Initializes a new instance of the <see cref="T:FastReport.Barcode.BarcodePDF417"/> class with default settings.

@@ -49,9 +49,39 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
 - **Этап 4 — продукт:** меню Файл, undo/redo, копирование/вставка, статус-бар, линейки,
   экспорт, unit-тесты ViewModel.
 
+## Модель полос FastReport (важно!)
+
+Полосы страницы хранятся **не в одном месте** (проверено по исходникам `ReportPage.cs`):
+
+| Полоса | Где хранится |
+|---|---|
+| ReportTitleBand | `page.ReportTitle` |
+| PageHeaderBand | `page.PageHeader` |
+| ColumnHeaderBand | `page.ColumnHeader` |
+| DataBand, GroupHeader/GroupFooter, Child | `page.Bands` (коллекция) |
+| ColumnFooterBand | `page.ColumnFooter` |
+| PageFooterBand | `page.PageFooter` |
+| ReportSummaryBand | `page.ReportSummary` |
+| OverlayBand | `page.Overlay` |
+
+Вертикальный порядок отображения: **ReportTitle → PageHeader → ColumnHeader → Bands(Data/Group) → ReportSummary → ColumnFooter → PageFooter → Overlay**
+(метод `ReportPage.GetChildObjects`; сводка идёт *перед* футером страницы).
+
+Отсюда правила:
+- добавление полосы — через `FastReportService.AddBand`, который раскладывает её в нужное место (`AttachBandToPage`);
+- удаление — через `page.RemoveChild(band)` (сам находит полосу в правильном свойстве);
+- перечисление всех полос страницы — только через `EnumerateAllBands` / `DesignSnapshotBuilder.EnumerateBands`;
+- при загрузке `.frx` FastReport сам раскладывает полосы по свойствам — снапшот собирает их обратно.
+
+Прочие подтверждённые факты API 2026.x:
+- `PaperWidth/PaperHeight` — в **миллиметрах**;
+- `LineObject`: нет `StartPoint/EndPoint/LineWidth/LineColor`; линия настраивается через `Border.Width/Style/Color`, направление — `Diagonal`;
+- PDF-экспорта в OpenSource нет (есть отдельный плагин `FastReport.OpenSource.Export.PdfSimple`);
+- цвет текста — `TextObject.TextColor`, выравнивание — `HorzAlign`/`VertAlign`, скруглённый прямоугольник — `ShapeKind.RoundRectangle`.
+
 ## Известные риски
 
 1. Растеризация шрифтов на канвасе и в превью может отличаться на 1–3 px — допустимо
    для визуального дизайна.
-2. Набор экспортеров OpenSource-версии проверяется эмпирически (ImageExport, HTMLExport подтверждены).
+2. Набор экспортеров OpenSource-версии: ImageExport, HTMLExport подтверждены; PDF — только через плагин.
 3. UI-функции FastReport (диалоги данных) в OpenSource недоступны — реализуем свои.

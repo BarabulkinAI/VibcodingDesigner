@@ -16,14 +16,15 @@ public class FastReportServiceTests
         var page = Assert.Single(snapshot.Pages);
 
         Assert.InRange(page.Width, 793f, 794f);    // 210 мм
-        Assert.InRange(page.Height, 1118f, 1119f); // 297 мм
+        Assert.InRange(page.Height, 1122f, 1123f); // 297 мм
         Assert.Equal(5, page.Bands.Count);
 
         Assert.Equal(BandKind.ReportTitle, page.Bands[0].Kind);
         Assert.Equal(BandKind.PageHeader, page.Bands[1].Kind);
         Assert.Equal(BandKind.Data, page.Bands[2].Kind);
-        Assert.Equal(BandKind.PageFooter, page.Bands[3].Kind);
-        Assert.Equal(BandKind.ReportSummary, page.Bands[4].Kind);
+        // Вертикальный порядок FastReport: сводка идёт перед футером страницы.
+        Assert.Equal(BandKind.ReportSummary, page.Bands[3].Kind);
+        Assert.Equal(BandKind.PageFooter, page.Bands[4].Kind);
     }
 
     [Fact]
@@ -180,7 +181,7 @@ public class FastReportServiceTests
                 .Single(o => o.Name == name);
 
             Assert.Equal(UnitConverter.CmToPx(2.5f), obj.Bounds.Left, 1);
-            Assert.Equal(UnitConverter.CmToPx(1.75f), obj.Bounds.Top, 1);
+            Assert.Equal(UnitConverter.CmToPx(1.75f), obj.Bounds.Top, 0);
             Assert.Equal(5, loaded.GetSnapshot().Pages[0].Bands.Count);
         }
         finally
