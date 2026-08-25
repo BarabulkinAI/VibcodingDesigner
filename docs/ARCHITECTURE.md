@@ -14,6 +14,29 @@ FastReport.OpenSource — это движок отчётов **без встро
 **Единицы:** канвас работает в логических пикселях при 96 DPI, FastReport — в юнитах
 (1 юнит = 1/96 дюйма). Конвертация — `UnitConverter` / `DesignSnapshotBuilder.ToPx|ToUnits`.
 
+## Жизненный цикл документа
+
+Редактор не только открывает готовые `.frx`, но и **создаёт отчёты с нуля**. Документ имеет состояния:
+
+```
+New (без пути) ──мутации──► Modified (IsDirty)
+Opened(path) ──мутации──►  Modified (IsDirty)
+Modified ──Save(path)──►   Opened(path), IsDirty=false
+```
+
+- **New** — `CreateNew()` строит отчёт полностью программно (A4 + стандартный набор полос).
+  Файла `.frx` ещё не существует, `CurrentFilePath = null`;
+- **первое сохранение нового документа = Save As**: пользователь выбирает путь, далее он
+  закрепляется за документом;
+- **Modified (`IsDirty`)** — любой мутирующий вызов сервиса (`AddObject`, `MoveObject`,
+  `AddBand`, …) выставляет флаг; `Load` и `Save`/`MarkSaved` сбрасывают;
+- при командах «Новый / Открыть / Закрыть» поверх `IsDirty` UI обязан спрашивать
+  подтверждение («Сохранить изменения?»).
+
+Владелец состояния — UI-слой (`MainViewModel`); сервис лишь отражает его через
+`CurrentFilePath` / `IsDirty` и выставляет `IsDirty` при мутациях. Системные диалоги
+файлов — отдельный `IFilesService` (этап 1).
+
 ## Структура
 
 ```
@@ -28,6 +51,7 @@ src/ReportDesigner/
 │   ├── DesignSnapshotBuilder.cs # Report → DesignSnapshot
 │   ├── UnitConverter.cs        # см ⇄ px (96 DPI)
 │   ├── IExportService.cs / ExportService.cs  # PNG / HTML
+│   ├── IFilesService.cs         # диалоги Open/Save (этап 1)
 │   ├── IPreviewService.cs / PreviewService.cs # рендер страницы в Bitmap
 │   └── IUndoRedoService.cs     # (этап 4) undo/redo на снимках
 ├── UI/
@@ -42,12 +66,14 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
 - **Этап 0 — скелет (готов):** модели снимка, UnitConverter, DesignSnapshotBuilder,
   FastReportService (CreateNew/Load/Save, полосы, объекты), ExportService, тесты.
 - **Этап 1 — канвас-редактор:** DesignSurface (лист, сетка, зум, выделение,
-  8 ручек ресайза, перемещение), клавиши (Del, Esc, стрелки).
+  8 ручек ресайза, перемещение), клавиши (Del, Esc, стрелки) + жизненный цикл
+  документа: New/Open/Save As (`IFilesService`), dirty-флаг, подтверждение
+  потери изменений, заголовок окна с именем файла.
 - **Этап 2 — палитра/дерево/свойства:** Toolbox (Text/Line/Shape/Picture), дерево
   объектов с z-order, панель свойств (координаты, текст, шрифт, цвета, рамки).
 - **Этап 3 — данные и полосы:** управление полосами, источники данных, выражения `[Field]`.
-- **Этап 4 — продукт:** меню Файл, undo/redo, копирование/вставка, статус-бар, линейки,
-  экспорт, unit-тесты ViewModel.
+- **Этап 4 — продукт:** расширенное меню Файл (недавние файлы, шаблоны нового документа),
+  undo/redo, копирование/вставка, статус-бар, линейки, экспорт, unit-тесты ViewModel.
 
 ## Модель полос FastReport (важно!)
 

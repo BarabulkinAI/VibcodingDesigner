@@ -12,7 +12,16 @@ namespace ReportDesigner.Services;
 /// </summary>
 public class FastReportService : IFastReportService
 {
+    private string? _currentFilePath;
+    private bool _isDirty;
+
     public Report CurrentReport { get; private set; } = new();
+
+    /// <inheritdoc/>
+    public string? CurrentFilePath => _currentFilePath;
+
+    /// <inheritdoc/>
+    public bool IsDirty => _isDirty;
 
     public void CreateNew()
     {
@@ -27,6 +36,10 @@ public class FastReportService : IFastReportService
         AddBand(BandKind.Data, 2f);
         AddBand(BandKind.PageFooter, 2f);
         AddBand(BandKind.ReportSummary, 2f);
+
+        // Новый документ: пути ещё нет, несохранённых изменений нет.
+        _currentFilePath = null;
+        _isDirty = false;
     }
 
     public void Load(string path)
@@ -34,9 +47,21 @@ public class FastReportService : IFastReportService
         var report = new Report();
         report.Load(path); // FastReport сам пересоберёт зависимости
         CurrentReport = report;
+        MarkSaved(path);
     }
 
-    public void Save(string path) => CurrentReport.Save(path);
+    public void Save(string path)
+    {
+        CurrentReport.Save(path);
+        MarkSaved(path);
+    }
+
+    /// <inheritdoc/>
+    public void MarkSaved(string path)
+    {
+        _currentFilePath = path;
+        _isDirty = false;
+    }
 
     public DesignSnapshot GetSnapshot() => DesignSnapshotBuilder.Build(CurrentReport);
 
@@ -66,6 +91,7 @@ public class FastReportService : IFastReportService
 
         band.Name = bandName ?? EnsureUniqueComponentName(kind.ToString());
         AttachBandToPage(page, band);
+        _isDirty = true;
         return band.Name;
     }
 
@@ -75,6 +101,7 @@ public class FastReportService : IFastReportService
         var band = EnumerateAllBands(page).FirstOrDefault(b => b.Name == bandName)
             ?? throw new KeyNotFoundException($"Полоса '{bandName}' не найдена.");
         page.RemoveChild(band);
+        _isDirty = true;
     }
 
     /// <summary>
@@ -107,6 +134,7 @@ public class FastReportService : IFastReportService
         var obj = CreateObject(type, leftCm, topCm, widthCm, heightCm);
         obj.Name = EnsureUniqueComponentName(DefaultName(type));
         band.Objects.Add(obj);
+        _isDirty = true;
         return obj.Name;
     }
 
@@ -115,6 +143,7 @@ public class FastReportService : IFastReportService
         var obj = FindObject(objectName);
         obj.Left = leftCm * Units.Centimeters;
         obj.Top = topCm * Units.Centimeters;
+        _isDirty = true;
     }
 
     public void ResizeObject(string objectName, float widthCm, float heightCm)
@@ -122,6 +151,7 @@ public class FastReportService : IFastReportService
         var obj = FindObject(objectName);
         obj.Width = widthCm * Units.Centimeters;
         obj.Height = heightCm * Units.Centimeters;
+        _isDirty = true;
     }
 
     public void DeleteObject(string objectName)
@@ -136,6 +166,7 @@ public class FastReportService : IFastReportService
                     if (baseObj is ReportComponentBase obj && obj.Name == objectName)
                     {
                         band.Objects.Remove(obj);
+                        _isDirty = true;
                         return;
                     }
                 }
