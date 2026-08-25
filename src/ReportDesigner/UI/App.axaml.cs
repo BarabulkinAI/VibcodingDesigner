@@ -10,7 +10,7 @@ namespace ReportDesigner;
 
 public class App : Application
 {
-    private IServiceProvider _serviceProvider;
+    private IServiceProvider _serviceProvider = null!;
 
     public override void Initialize()
     {
