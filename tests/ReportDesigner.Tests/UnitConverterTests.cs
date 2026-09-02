@@ -10,7 +10,7 @@ public class UnitConverterTests
     {
         Assert.Equal(96, UnitConverter.CmToPx(UnitConverter.CmPerInch), 2);
         Assert.InRange(UnitConverter.CmToPx(21f), 793f, 794f);   // ширина A4
-        Assert.InRange(UnitConverter.CmToPx(29.7f), 1118f, 1119f); // высота A4
+        Assert.InRange(UnitConverter.CmToPx(29.7f), 1122f, 1123f); // высота A4
     }
 
     [Fact]

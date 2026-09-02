@@ -3,6 +3,8 @@ ReportDesigner/obj
 src/ReportDesigner/obj
 .vs
 src/ReportDesigner/bin
+tests/**/bin
+tests/**/obj
 tests/ReportDesigner.Tests/bin/Debug/net10.0/.msCoverageSourceRootsMapping_ReportDesigner.Tests
 tests/ReportDesigner.Tests/obj/project.assets.json
 tests/ReportDesigner.Tests/obj/project.nuget.cache

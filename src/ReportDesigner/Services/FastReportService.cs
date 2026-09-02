@@ -12,7 +12,16 @@ namespace ReportDesigner.Services;
 /// </summary>
 public class FastReportService : IFastReportService
 {
+    private string? _currentFilePath;
+    private bool _isDirty;
+
     public Report CurrentReport { get; private set; } = new();
+
+    /// <inheritdoc/>
+    public string? CurrentFilePath => _currentFilePath;
+
+    /// <inheritdoc/>
+    public bool IsDirty => _isDirty;
 
     public void CreateNew()
     {
@@ -27,6 +36,10 @@ public class FastReportService : IFastReportService
         AddBand(BandKind.Data, 2f);
         AddBand(BandKind.PageFooter, 2f);
         AddBand(BandKind.ReportSummary, 2f);
+
+        // Новый документ: пути ещё нет, несохранённых изменений нет.
+        _currentFilePath = null;
+        _isDirty = false;
     }
 
     public void Load(string path)
@@ -34,9 +47,21 @@ public class FastReportService : IFastReportService
         var report = new Report();
         report.Load(path); // FastReport сам пересоберёт зависимости
         CurrentReport = report;
+        MarkSaved(path);
     }
 
-    public void Save(string path) => CurrentReport.Save(path);
+    public void Save(string path)
+    {
+        CurrentReport.Save(path);
+        MarkSaved(path);
+    }
+
+    /// <inheritdoc/>
+    public void MarkSaved(string path)
+    {
+        _currentFilePath = path;
+        _isDirty = false;
+    }
 
     public DesignSnapshot GetSnapshot() => DesignSnapshotBuilder.Build(CurrentReport);
 
@@ -49,7 +74,7 @@ public class FastReportService : IFastReportService
         var page = GetFirstPage();
         var height = heightCm * Units.Centimeters;
 
-        Base bandBase = kind switch
+        BandBase band = kind switch
         {
             BandKind.ReportTitle => new ReportTitleBand { Height = height },
             BandKind.ReportSummary => new ReportSummaryBand { Height = height },
@@ -64,31 +89,42 @@ public class FastReportService : IFastReportService
             _ => new DataBand { Height = height },
         };
 
-        var band = bandBase as BandBase;
-        if (band == null)
-            throw new ArgumentException($"Тип {kind} не является полосой.", nameof(kind));
-
         band.Name = bandName ?? EnsureUniqueComponentName(kind.ToString());
-        InsertBandInOrder(page, band, kind);
+        AttachBandToPage(page, band);
+        _isDirty = true;
         return band.Name;
     }
 
     public void RemoveBand(string bandName)
     {
-        var page = GetFirstPage();       
-        BandBase? band = null;
-        foreach (BandBase item in page.Bands)
-        {
-            if(item.Name == bandName)
-            {
-                band = item; break;
-            }
-        }
-         if(band == null) throw new KeyNotFoundException($"Полоса '{bandName}' не найдена.");
-        page.Bands.Remove(band);
+        var page = GetFirstPage();
+        var band = EnumerateAllBands(page).FirstOrDefault(b => b.Name == bandName)
+            ?? throw new KeyNotFoundException($"Полоса '{bandName}' не найдена.");
+        page.RemoveChild(band);
+        _isDirty = true;
     }
 
-    // ------------------------------------------------------------------
+    /// <summary>
+    /// Назначает полосу на страницу. Специальные полосы (титул, колонтитулы,
+    /// сводка, оверлей) хранятся в отдельных свойствах <see cref="ReportPage"/>,
+    /// а data/group полосы — в коллекции <see cref="ReportPage.Bands"/>.
+    /// </summary>
+    private static void AttachBandToPage(ReportPage page, BandBase band)
+    {
+        switch (band)
+        {
+            case ReportTitleBand b: page.ReportTitle = b; break;
+            case ReportSummaryBand b: page.ReportSummary = b; break;
+            case PageHeaderBand b: page.PageHeader = b; break;
+            case PageFooterBand b: page.PageFooter = b; break;
+            case ColumnHeaderBand b: page.ColumnHeader = b; break;
+            case ColumnFooterBand b: page.ColumnFooter = b; break;
+            case OverlayBand b: page.Overlay = b; break;
+            default: page.Bands.Add(band); break;
+        }
+    }
+
+// ------------------------------------------------------------------
     // Объекты
     // ------------------------------------------------------------------
 
@@ -98,6 +134,7 @@ public class FastReportService : IFastReportService
         var obj = CreateObject(type, leftCm, topCm, widthCm, heightCm);
         obj.Name = EnsureUniqueComponentName(DefaultName(type));
         band.Objects.Add(obj);
+        _isDirty = true;
         return obj.Name;
     }
 
@@ -106,6 +143,7 @@ public class FastReportService : IFastReportService
         var obj = FindObject(objectName);
         obj.Left = leftCm * Units.Centimeters;
         obj.Top = topCm * Units.Centimeters;
+        _isDirty = true;
     }
 
     public void ResizeObject(string objectName, float widthCm, float heightCm)
@@ -113,6 +151,7 @@ public class FastReportService : IFastReportService
         var obj = FindObject(objectName);
         obj.Width = widthCm * Units.Centimeters;
         obj.Height = heightCm * Units.Centimeters;
+        _isDirty = true;
     }
 
     public void DeleteObject(string objectName)
@@ -120,13 +159,14 @@ public class FastReportService : IFastReportService
         foreach (var pageBase in CurrentReport.Pages)
         {
             if (pageBase is not ReportPage page) continue;
-            foreach (BandBase band in page.Bands)
+            foreach (var band in EnumerateAllBands(page))
             {
                 foreach (var baseObj in band.Objects)
                 {
                     if (baseObj is ReportComponentBase obj && obj.Name == objectName)
                     {
                         band.Objects.Remove(obj);
+                        _isDirty = true;
                         return;
                     }
                 }
@@ -143,7 +183,7 @@ public class FastReportService : IFastReportService
             textObject.Text = text;
     }
 
-    // ------------------------------------------------------------------
+// ------------------------------------------------------------------
     // Внутреннее
     // ------------------------------------------------------------------
 
@@ -151,24 +191,34 @@ public class FastReportService : IFastReportService
         CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault()
         ?? throw new InvalidOperationException("Отчёт не содержит страниц. Сначала вызовите CreateNew().");
 
+    /// <summary>
+    /// Возвращает все полосы страницы в вертикальном порядке отображения — и из
+    /// специальных свойств (<see cref="ReportPage"/>), и из коллекции <see cref="ReportPage.Bands"/>.
+    /// </summary>
+    private static IEnumerable<BandBase> EnumerateAllBands(ReportPage page)
+    {
+        if (page.ReportTitle != null) yield return page.ReportTitle;
+        if (page.PageHeader != null) yield return page.PageHeader;
+        if (page.ColumnHeader != null) yield return page.ColumnHeader;
+        foreach (BandBase band in page.Bands)
+            yield return band;
+        if (page.ReportSummary != null) yield return page.ReportSummary;
+        if (page.ColumnFooter != null) yield return page.ColumnFooter;
+        if (page.PageFooter != null) yield return page.PageFooter;
+        if (page.Overlay != null) yield return page.Overlay;
+    }
+
     private BandBase FindBand(string? bandName = null)
     {
         var page = GetFirstPage();
         if (bandName != null)
         {
-            BandBase? band = null;
-            foreach (BandBase baseBand in page.Bands) 
-            { 
-                if(baseBand.Name == bandName)
-                {
-                    band = baseBand; break;
-                }
-            }
-            if (band != null) return band;
-            throw new KeyNotFoundException($"Полоса '{bandName}' не найдена.");
+            var band = EnumerateAllBands(page).FirstOrDefault(b => b.Name == bandName)
+                ?? throw new KeyNotFoundException($"Полоса '{bandName}' не найдена.");
+            return band;
         }
-
-        return page.Bands.OfType<DataBand>().FirstOrDefault() ?? page.Bands[0];
+        return EnumerateAllBands(page).OfType<DataBand>().FirstOrDefault()
+            ?? throw new InvalidOperationException("В отчёте нет полосы данных. Добавьте её через AddBand(BandKind.Data).");
     }
 
     private ReportComponentBase FindObject(string objectName)
@@ -176,7 +226,7 @@ public class FastReportService : IFastReportService
         foreach (var pageBase in CurrentReport.Pages)
         {
             if (pageBase is not ReportPage page) continue;
-            foreach (BandBase band in page.Bands)
+            foreach (var band in EnumerateAllBands(page))
             {
                 foreach (var baseObj in band.Objects)
                 {
@@ -215,10 +265,8 @@ public class FastReportService : IFastReportService
     private static LineObject CreateLineObject(RectangleF bounds) => new()
     {
         Bounds = bounds,
-        StartPoint = new PointF(0, 0),
-        EndPoint = new PointF(bounds.Width, 0),
-        LineWidth = 2,
-        LineColor = Color.Black,
+        Diagonal = false, // горизонтальная линия слева направо
+        Border = { Lines = BorderLines.All, Width = 2f, Color = Color.Black },
     };
 
     private static ShapeObject CreateShapeObject(RectangleF bounds)
@@ -257,7 +305,7 @@ public class FastReportService : IFastReportService
         {
             if (pageBase.Name == name) return true;
             if (pageBase is not ReportPage page) continue;
-            foreach (BandBase band in page.Bands)
+            foreach (var band in EnumerateAllBands(page))
             {
                 if (band.Name == name) return true;
                 foreach (var baseObj in band.Objects)
@@ -268,34 +316,4 @@ public class FastReportService : IFastReportService
         }
         return false;
     }
-
-    private static void InsertBandInOrder(ReportPage page, BandBase band, BandKind kind)
-    {
-        var rank = BandRank(kind);
-        for (var index = 0; index < page.Bands.Count; index++)
-        {
-            if (BandRank(DesignSnapshotBuilder.ToBandKind(page.Bands[index])) > rank)
-            {
-                page.Bands.Insert(index, band);
-                return;
-            }
-        }
-        page.Bands.Add(band);
-    }
-
-    private static int BandRank(BandKind kind) => kind switch
-    {
-        BandKind.ReportTitle => 0,
-        BandKind.PageHeader => 1,
-        BandKind.ColumnHeader => 2,
-        BandKind.GroupHeader => 3,
-        BandKind.Data => 4,
-        BandKind.GroupFooter => 5,
-        BandKind.ColumnFooter => 6,
-        BandKind.PageFooter => 7,
-        BandKind.ReportSummary => 8,
-        BandKind.Overlay => 9,
-        BandKind.Child => 10,
-        _ => 4,
-    };
 }
