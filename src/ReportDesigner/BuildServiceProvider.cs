@@ -16,6 +16,10 @@ public static class BuildServiceProvider
         services.AddSingleton<IFastReportService, FastReportService>();
         services.AddSingleton<IPreviewService, PreviewService>();
         services.AddSingleton<IExportService, ExportService>();
+        services.AddSingleton<HostWindowProvider>();
+        services.AddSingleton<IHostWindowProvider>(sp => sp.GetRequiredService<HostWindowProvider>());
+        services.AddSingleton<IFilesService, FilesService>();
+        services.AddSingleton<IDialogService, DialogService>();
         // services.AddSingleton<IMyService, MyService>();
         // services.AddTransient<IMyTransientService, MyTransientService>();
 

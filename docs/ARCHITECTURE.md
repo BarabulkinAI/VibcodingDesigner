@@ -50,27 +50,41 @@ src/ReportDesigner/
 │   ├── IFastReportService.cs
 │   ├── DesignSnapshotBuilder.cs # Report → DesignSnapshot
 │   ├── UnitConverter.cs        # см ⇄ px (96 DPI)
+│   ├── ResizeGeometry.cs       # ручки ресайза, hit-test, кламп в пределах полосы
+│   ├── SnapshotHitTester.cs    # hit-test объекта по точке канваса
 │   ├── IExportService.cs / ExportService.cs  # PNG / HTML
-│   ├── IFilesService.cs         # диалоги Open/Save (этап 1)
+│   ├── IFilesService.cs / FilesService.cs     # диалоги Open/Save (IStorageProvider)
+│   ├── IDialogService.cs / DialogService.cs   # подтверждение потери изменений
+│   ├── IHostWindowProvider.cs / HostWindowProvider.cs # доступ к TopLevel из DI-сервисов
 │   ├── IPreviewService.cs / PreviewService.cs # рендер страницы в Bitmap
 │   └── IUndoRedoService.cs     # (этап 4) undo/redo на снимках
 ├── UI/
-│   ├── Views/Controls/         # DesignSurface, Ruler и т.п. (этап 1+)
-│   ├── ViewModels/             # MainViewModel, DesignSurfaceVM, PropertiesVM…
+│   ├── Views/Controls/DesignSurface.cs        # канвас: рендер, зум (Ctrl+колесо), drag/resize/клавиши
+│   ├── Views/Dialogs/ConfirmDiscardChangesDialog.axaml(.cs)
+│   ├── ViewModels/              # MainViewModel, DesignSurfaceViewModel, ObjectTreeViewModel,
+│   │                             # PropertiesPanelViewModel
 │   └── App.axaml / MainWindow.axaml
-tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отчёта, потом undo/redo
+tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отчёта и его свойства, геометрия/hit-test,
+                                  # DesignSurfaceViewModel, ObjectTreeViewModel, PropertiesPanelViewModel,
+                                  # потом undo/redo
 ```
 
 ## Дорожная карта
 
 - **Этап 0 — скелет (готов):** модели снимка, UnitConverter, DesignSnapshotBuilder,
   FastReportService (CreateNew/Load/Save, полосы, объекты), ExportService, тесты.
-- **Этап 1 — канвас-редактор:** DesignSurface (лист, сетка, зум, выделение,
-  8 ручек ресайза, перемещение), клавиши (Del, Esc, стрелки) + жизненный цикл
+- **Этап 1 — канвас-редактор (готов):** DesignSurface (лист, сетка, зум по Ctrl+колесо,
+  выделение, 8 ручек ресайза, перемещение), клавиши (Del, Esc, стрелки) + жизненный цикл
   документа: New/Open/Save As (`IFilesService`), dirty-флаг, подтверждение
-  потери изменений, заголовок окна с именем файла.
-- **Этап 2 — палитра/дерево/свойства:** Toolbox (Text/Line/Shape/Picture), дерево
-  объектов с z-order, панель свойств (координаты, текст, шрифт, цвета, рамки).
+  потери изменений, заголовок окна с именем файла. Вертикально объект зажат в пределах
+  своей полосы (band) — в сервисе нет репарентинга между полосами, это осознанное
+  ограничение, как в большинстве band-based дизайнеров отчётов.
+- **Этап 2 — палитра/дерево/свойства (готов):** Toolbox (Text/Line/Shape/Picture) — создание
+  объекта кликом по канвасу; дерево объектов (полосы → объекты) с командами z-order (на
+  передний/задний план, вперёд/назад); панель свойств (координаты/размер/видимость,
+  текст/шрифт/выравнивание, рамка, заливка и вид фигуры, стиль линии, выбор/очистка
+  изображения для Picture через `IFilesService.PickImagePathAsync`). Выделение
+  синхронизировано между канвасом, деревом и панелью свойств во всех направлениях.
 - **Этап 3 — данные и полосы:** управление полосами, источники данных, выражения `[Field]`.
 - **Этап 4 — продукт:** расширенное меню Файл (недавние файлы, шаблоны нового документа),
   undo/redo, копирование/вставка, статус-бар, линейки, экспорт, unit-тесты ViewModel.

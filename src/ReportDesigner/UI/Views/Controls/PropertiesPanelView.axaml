@@ -1,0 +1,94 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ReportDesigner.UI.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="260" d:DesignHeight="500"
+             x:Class="ReportDesigner.UI.Views.Controls.PropertiesPanelView"
+             x:DataType="vm:PropertiesPanelViewModel">
+
+    <Grid>
+        <TextBlock Text="Ничего не выделено" Margin="8" Opacity="0.6"
+                   IsVisible="{Binding !HasSelection}"/>
+
+        <ScrollViewer IsVisible="{Binding HasSelection}">
+            <StackPanel Margin="8" Spacing="10">
+                <TextBlock Text="{Binding SelectedTypeLabel}" FontWeight="Bold"/>
+
+                <StackPanel Spacing="4">
+                    <TextBlock Text="Координаты и размер, см" FontWeight="SemiBold"/>
+                    <Grid ColumnDefinitions="Auto,*,Auto,*" RowDefinitions="Auto,Auto">
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Left" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding LeftCm}" Margin="0,0,4,4"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2" Text="Top" VerticalAlignment="Center" Margin="0,0,4,4"/>
+                        <TextBox Grid.Row="0" Grid.Column="3" Text="{Binding TopCm}" Margin="0,0,0,4"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Width" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding WidthCm}" Margin="0,0,4,0"/>
+                        <TextBlock Grid.Row="1" Grid.Column="2" Text="Height" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                        <TextBox Grid.Row="1" Grid.Column="3" Text="{Binding HeightCm}"/>
+                    </Grid>
+                    <CheckBox Content="Видимый" IsChecked="{Binding Visible}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="4" IsVisible="{Binding IsTextObject}">
+                    <TextBlock Text="Текст" FontWeight="SemiBold"/>
+                    <TextBox Text="{Binding Text}" AcceptsReturn="True" TextWrapping="Wrap" Height="60"/>
+
+                    <TextBlock Text="Шрифт"/>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <TextBox Text="{Binding FontName}" Width="120"/>
+                        <TextBox Text="{Binding FontSize}" Width="50"/>
+                    </StackPanel>
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <CheckBox Content="Ж" ToolTip.Tip="Полужирный" IsChecked="{Binding FontBold}"/>
+                        <CheckBox Content="К" ToolTip.Tip="Курсив" IsChecked="{Binding FontItalic}"/>
+                    </StackPanel>
+
+                    <TextBlock Text="Цвет текста (#RRGGBB)"/>
+                    <TextBox Text="{Binding TextColorHex}"/>
+
+                    <TextBlock Text="Выравнивание"/>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <ComboBox ItemsSource="{Binding HorizontalAlignOptions}" SelectedItem="{Binding HorizontalAlign}" Width="100"/>
+                        <ComboBox ItemsSource="{Binding VerticalAlignOptions}" SelectedItem="{Binding VerticalAlign}" Width="100"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Spacing="4" IsVisible="{Binding IsShapeObject}">
+                    <TextBlock Text="Фигура" FontWeight="SemiBold"/>
+                    <ComboBox ItemsSource="{Binding ShapeKindOptions}" SelectedItem="{Binding ShapeKind}" HorizontalAlignment="Stretch"/>
+                    <TextBlock Text="Цвет заливки (#RRGGBB)"/>
+                    <TextBox Text="{Binding FillColorHex}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="4" IsVisible="{Binding IsLineObject}">
+                    <TextBlock Text="Линия" FontWeight="SemiBold"/>
+                    <TextBlock Text="Толщина, см"/>
+                    <TextBox Text="{Binding LineWidthCm}"/>
+                    <TextBlock Text="Цвет линии (#RRGGBB)"/>
+                    <TextBox Text="{Binding LineColorHex}"/>
+                </StackPanel>
+
+                <StackPanel Spacing="4" IsVisible="{Binding IsPictureObject}">
+                    <TextBlock Text="Картинка" FontWeight="SemiBold"/>
+                    <TextBlock Text="Изображение задано" IsVisible="{Binding HasImage}" Opacity="0.7"/>
+                    <TextBlock Text="Изображение не задано" IsVisible="{Binding !HasImage}" Opacity="0.7"/>
+                    <StackPanel Orientation="Horizontal" Spacing="4">
+                        <Button Content="Выбрать..." Command="{Binding PickImageCommand}"/>
+                        <Button Content="Очистить" Command="{Binding ClearImageCommand}" IsVisible="{Binding HasImage}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Spacing="4" IsVisible="{Binding IsBorderCapable}">
+                    <TextBlock Text="Рамка" FontWeight="SemiBold"/>
+                    <CheckBox Content="Показывать рамку" IsChecked="{Binding ShowBorder}"/>
+                    <TextBlock Text="Толщина, см"/>
+                    <TextBox Text="{Binding BorderWidthCm}"/>
+                    <TextBlock Text="Цвет рамки (#RRGGBB)"/>
+                    <TextBox Text="{Binding BorderColorHex}"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+
+</UserControl>

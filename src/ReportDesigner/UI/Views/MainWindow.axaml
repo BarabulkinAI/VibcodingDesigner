@@ -3,11 +3,13 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:viewModels="clr-namespace:ReportDesigner.UI.ViewModels"
-        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        xmlns:controls="clr-namespace:ReportDesigner.UI.Views.Controls"
+        xmlns:models="clr-namespace:ReportDesigner.Models"
+        mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="600"
         x:Class="ReportDesigner.Views.MainWindow"
         x:DataType="viewModels:MainViewModel"
         Icon="/UI/Assets/avalonia-logo.ico"
-        Title="ReportDesigner">
+        Title="{Binding Title}">
 
     <Design.DataContext>
         <!-- This only sets the DataContext for the previewer in an IDE,
@@ -16,12 +18,47 @@
     </Design.DataContext>
 
     <DockPanel>
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5">
-            <Button Content="Обновить превью" Click="OnRefresh"/>
+        <Menu DockPanel.Dock="Top">
+            <MenuItem Header="Файл">
+                <MenuItem Header="Новый" Command="{Binding NewCommand}" InputGesture="Ctrl+N"/>
+                <MenuItem Header="Открыть..." Command="{Binding OpenCommand}" InputGesture="Ctrl+O"/>
+                <MenuItem Header="Сохранить" Command="{Binding SaveCommand}" InputGesture="Ctrl+S"/>
+                <MenuItem Header="Сохранить как..." Command="{Binding SaveAsCommand}" InputGesture="Ctrl+Shift+S"/>
+                <Separator/>
+                <MenuItem Header="Выход" Click="OnExitClick"/>
+            </MenuItem>
+        </Menu>
+
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5" Spacing="6">
+            <Button Content="Текст" Command="{Binding DesignSurface.SelectToolCommand}"
+                    CommandParameter="{x:Static models:DesignObjectType.Text}"/>
+            <Button Content="Линия" Command="{Binding DesignSurface.SelectToolCommand}"
+                    CommandParameter="{x:Static models:DesignObjectType.Line}"/>
+            <Button Content="Фигура" Command="{Binding DesignSurface.SelectToolCommand}"
+                    CommandParameter="{x:Static models:DesignObjectType.Shape}"/>
+            <Button Content="Картинка" Command="{Binding DesignSurface.SelectToolCommand}"
+                    CommandParameter="{x:Static models:DesignObjectType.Picture}"/>
+            <Button Content="Обновить превью" Click="OnRefresh" Margin="20,0,0,0"/>
         </StackPanel>
-        <ScrollViewer>
-            <Image Name="PreviewImage" Stretch="None"/>
-        </ScrollViewer>
+
+        <Grid ColumnDefinitions="200,4,2*,4,260,4,3*">
+            <controls:ObjectTreeView Grid.Column="0" DataContext="{Binding ObjectTree}"/>
+            <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"/>
+
+            <ScrollViewer Grid.Column="2"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto">
+                <controls:DesignSurface ViewModel="{Binding DesignSurface}"/>
+            </ScrollViewer>
+            <GridSplitter Grid.Column="3" Width="4" ResizeDirection="Columns"/>
+
+            <controls:PropertiesPanelView Grid.Column="4" DataContext="{Binding PropertiesPanel}"/>
+            <GridSplitter Grid.Column="5" Width="4" ResizeDirection="Columns"/>
+
+            <ScrollViewer Grid.Column="6">
+                <Image Name="PreviewImage" Stretch="None"/>
+            </ScrollViewer>
+        </Grid>
     </DockPanel>
 
 </Window>

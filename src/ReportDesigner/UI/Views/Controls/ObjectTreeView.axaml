@@ -1,0 +1,37 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ReportDesigner.UI.ViewModels"
+             mc:Ignorable="d" d:DesignWidth="220" d:DesignHeight="400"
+             x:Class="ReportDesigner.UI.Views.Controls.ObjectTreeView"
+             x:DataType="vm:ObjectTreeViewModel">
+
+    <!--
+        Раздельные неявные шаблоны по типу узла (а не один общий TreeDataTemplate с
+        ItemsSource="{Binding Objects}", применяемый ко всем уровням дерева) — иначе Avalonia
+        пытается применить один и тот же скомпилированный биндинг "Objects" (выведенный под
+        ObjectTreeBandNode) и к листовым ObjectTreeObjectNode, у которых такого свойства нет, что
+        даёт InvalidCastException при клике/раскрытии дерева.
+    -->
+    <UserControl.DataTemplates>
+        <TreeDataTemplate DataType="vm:ObjectTreeBandNode" ItemsSource="{Binding Objects}">
+            <TextBlock Text="{Binding DisplayName}"/>
+        </TreeDataTemplate>
+        <DataTemplate DataType="vm:ObjectTreeObjectNode">
+            <TextBlock Text="{Binding DisplayName}"/>
+        </DataTemplate>
+    </UserControl.DataTemplates>
+
+    <DockPanel>
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4" Spacing="2">
+            <Button Content="⬆⬆" ToolTip.Tip="На передний план" Command="{Binding BringToFrontCommand}"/>
+            <Button Content="⬆" ToolTip.Tip="Переместить вперёд" Command="{Binding MoveForwardCommand}"/>
+            <Button Content="⬇" ToolTip.Tip="Переместить назад" Command="{Binding MoveBackwardCommand}"/>
+            <Button Content="⬇⬇" ToolTip.Tip="На задний план" Command="{Binding SendToBackCommand}"/>
+        </StackPanel>
+
+        <TreeView Name="Tree" ItemsSource="{Binding Bands}"/>
+    </DockPanel>
+
+</UserControl>

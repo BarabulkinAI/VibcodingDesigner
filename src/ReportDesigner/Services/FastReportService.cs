@@ -183,6 +183,184 @@ public class FastReportService : IFastReportService
             textObject.Text = text;
     }
 
+    // ------------------------------------------------------------------
+    // Свойства объектов
+    // ------------------------------------------------------------------
+
+    public void SetText(string objectName, string text)
+    {
+        var obj = FindObject(objectName) as TextObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является текстовым.");
+        obj.Text = text;
+        _isDirty = true;
+    }
+
+    public void SetFont(string objectName, string fontName, float fontSize, bool bold, bool italic)
+    {
+        var obj = FindObject(objectName) as TextObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является текстовым.");
+        var style = FontStyle.Regular;
+        if (bold) style |= FontStyle.Bold;
+        if (italic) style |= FontStyle.Italic;
+        obj.Font = new Font(fontName, fontSize, style);
+        _isDirty = true;
+    }
+
+    public void SetTextColor(string objectName, Color color)
+    {
+        var obj = FindObject(objectName) as TextObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является текстовым.");
+        obj.TextColor = color;
+        _isDirty = true;
+    }
+
+    public void SetHorizontalAlign(string objectName, DesignTextAlign align)
+    {
+        var obj = FindObject(objectName) as TextObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является текстовым.");
+        obj.HorzAlign = align switch
+        {
+            DesignTextAlign.Center => HorzAlign.Center,
+            DesignTextAlign.Right => HorzAlign.Right,
+            _ => HorzAlign.Left,
+        };
+        _isDirty = true;
+    }
+
+    public void SetVerticalAlign(string objectName, DesignVerticalAlign align)
+    {
+        var obj = FindObject(objectName) as TextObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является текстовым.");
+        obj.VertAlign = align switch
+        {
+            DesignVerticalAlign.Middle => VertAlign.Center,
+            DesignVerticalAlign.Bottom => VertAlign.Bottom,
+            _ => VertAlign.Top,
+        };
+        _isDirty = true;
+    }
+
+    public void SetBorder(string objectName, bool show, float widthCm, Color color)
+    {
+        var obj = FindObject(objectName);
+        obj.Border.Lines = show ? BorderLines.All : BorderLines.None;
+        obj.Border.Width = widthCm * Units.Centimeters;
+        obj.Border.Color = color;
+        _isDirty = true;
+    }
+
+    public void SetFillColor(string objectName, Color color)
+    {
+        var obj = FindObject(objectName) as ShapeObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является фигурой.");
+        obj.FillColor = color;
+        _isDirty = true;
+    }
+
+    public void SetShapeKind(string objectName, DesignShapeKind kind)
+    {
+        var obj = FindObject(objectName) as ShapeObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является фигурой.");
+        obj.Shape = kind switch
+        {
+            DesignShapeKind.Ellipse => ShapeKind.Ellipse,
+            DesignShapeKind.Diamond => ShapeKind.Diamond,
+            DesignShapeKind.Triangle => ShapeKind.Triangle,
+            DesignShapeKind.RoundedRectangle => ShapeKind.RoundRectangle,
+            _ => ShapeKind.Rectangle,
+        };
+        _isDirty = true;
+    }
+
+    public void SetLineStyle(string objectName, float widthCm, Color color)
+    {
+        var obj = FindObject(objectName) as LineObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является линией.");
+        obj.Border.Width = widthCm * Units.Centimeters;
+        obj.Border.Color = color;
+        _isDirty = true;
+    }
+
+    public void SetImage(string objectName, string imagePath)
+    {
+        var obj = FindObject(objectName) as PictureObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является картинкой.");
+        // Image.FromFile держит файл открытым, пока живёт возвращённый Image (GDI+ грузит его
+        // лениво) — клонируем в независимый Bitmap и сразу освобождаем исходный, иначе файл
+        // остаётся заблокированным на весь срок жизни документа.
+        using var loaded = Image.FromFile(imagePath);
+        obj.Image = new Bitmap(loaded);
+        _isDirty = true;
+    }
+
+    public void ClearImage(string objectName)
+    {
+        var obj = FindObject(objectName) as PictureObject
+            ?? throw new InvalidOperationException($"Объект '{objectName}' не является картинкой.");
+        obj.Image = null;
+        _isDirty = true;
+    }
+
+    public void SetVisible(string objectName, bool visible)
+    {
+        FindObject(objectName).Visible = visible;
+        _isDirty = true;
+    }
+
+    public void SetName(string objectName, string newName)
+    {
+        var obj = FindObject(objectName);
+        if (newName != objectName && ComponentExists(newName))
+            throw new InvalidOperationException($"Имя '{newName}' уже используется.");
+        obj.Name = newName;
+        _isDirty = true;
+    }
+
+    // ------------------------------------------------------------------
+    // Z-order
+    // ------------------------------------------------------------------
+
+    public void BringToFront(string objectName)
+    {
+        var (band, obj) = FindBandAndObject(objectName);
+        MoveToZOrder(obj, obj.ZOrder, band.Objects.Count - 1);
+        _isDirty = true;
+    }
+
+    public void SendToBack(string objectName)
+    {
+        var (_, obj) = FindBandAndObject(objectName);
+        MoveToZOrder(obj, obj.ZOrder, 0);
+        _isDirty = true;
+    }
+
+    public void MoveForward(string objectName)
+    {
+        var (band, obj) = FindBandAndObject(objectName);
+        var current = obj.ZOrder;
+        MoveToZOrder(obj, current, Math.Min(current + 1, band.Objects.Count - 1));
+        _isDirty = true;
+    }
+
+    public void MoveBackward(string objectName)
+    {
+        var (_, obj) = FindBandAndObject(objectName);
+        var current = obj.ZOrder;
+        MoveToZOrder(obj, current, Math.Max(current - 1, 0));
+        _isDirty = true;
+    }
+
+    /// <summary>
+    /// Ставит объект на позицию <paramref name="desiredIndex"/> в коллекции его полосы.
+    /// Сеттер <c>Base.ZOrder</c> у FastReport реализован как remove+insert относительно
+    /// ТЕКУЩЕГО индекса объекта: если запрошенный индекс больше текущего, он сам вычитает 1
+    /// (компенсируя сдвиг после удаления объекта из старой позиции) — поэтому, чтобы объект
+    /// реально оказался на <paramref name="desiredIndex"/>, при движении вперёд нужно запросить
+    /// на 1 больше. Проверено эмпирически на реальной сборке FastReport.OpenSource 2026.2.3.
+    /// </summary>
+    private static void MoveToZOrder(ReportComponentBase obj, int currentIndex, int desiredIndex) =>
+        obj.ZOrder = desiredIndex > currentIndex ? desiredIndex + 1 : desiredIndex;
+
 // ------------------------------------------------------------------
     // Внутреннее
     // ------------------------------------------------------------------
@@ -221,7 +399,9 @@ public class FastReportService : IFastReportService
             ?? throw new InvalidOperationException("В отчёте нет полосы данных. Добавьте её через AddBand(BandKind.Data).");
     }
 
-    private ReportComponentBase FindObject(string objectName)
+    private ReportComponentBase FindObject(string objectName) => FindBandAndObject(objectName).Object;
+
+    private (BandBase Band, ReportComponentBase Object) FindBandAndObject(string objectName)
     {
         foreach (var pageBase in CurrentReport.Pages)
         {
@@ -231,7 +411,7 @@ public class FastReportService : IFastReportService
                 foreach (var baseObj in band.Objects)
                 {
                     if (baseObj is ReportComponentBase obj && obj.Name == objectName)
-                        return obj;
+                        return (band, obj);
                 }
             }
         }

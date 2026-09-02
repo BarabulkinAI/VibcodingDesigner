@@ -1,4 +1,5 @@
-﻿using FastReport;
+﻿using System.Drawing;
+using FastReport;
 using ReportDesigner.Models;
 
 namespace ReportDesigner.Services;
@@ -36,4 +37,25 @@ public interface IFastReportService
 
     // --- Устаревшие методы (основные сценарии) ---
     void AddTextToDataBand(string text, float xCm, float yCm, float wCm, float hCm);
+
+    // --- Свойства объектов ---
+    void SetText(string objectName, string text);
+    void SetFont(string objectName, string fontName, float fontSize, bool bold, bool italic);
+    void SetTextColor(string objectName, Color color);
+    void SetHorizontalAlign(string objectName, DesignTextAlign align);
+    void SetVerticalAlign(string objectName, DesignVerticalAlign align);
+    void SetBorder(string objectName, bool show, float widthCm, Color color);
+    void SetFillColor(string objectName, Color color);
+    void SetShapeKind(string objectName, DesignShapeKind kind);
+    void SetLineStyle(string objectName, float widthCm, Color color);
+    void SetImage(string objectName, string imagePath);
+    void ClearImage(string objectName);
+    void SetVisible(string objectName, bool visible);
+    void SetName(string objectName, string newName);
+
+    // --- Z-order ---
+    void BringToFront(string objectName);
+    void SendToBack(string objectName);
+    void MoveForward(string objectName);
+    void MoveBackward(string objectName);
 }
