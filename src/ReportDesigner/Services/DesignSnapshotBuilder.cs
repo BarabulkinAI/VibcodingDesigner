@@ -35,6 +35,7 @@ public static class DesignSnapshotBuilder
                 Kind = ToBandKind(band),
                 Top = topPx,
                 Height = heightPx,
+                DataSourceName = (band as DataBand)?.DataSource?.Name,
                 Objects = BuildObjects(band),
             });
             topPx += heightPx;

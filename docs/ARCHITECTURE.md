@@ -85,7 +85,20 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
   текст/шрифт/выравнивание, рамка, заливка и вид фигуры, стиль линии, выбор/очистка
   изображения для Picture через `IFilesService.PickImagePathAsync`). Выделение
   синхронизировано между канвасом, деревом и панелью свойств во всех направлениях.
-- **Этап 3 — данные и полосы:** управление полосами, источники данных, выражения `[Field]`.
+- **Этап 3 — данные и полосы (готов):**
+  - *Управление полосами* — в дереве объектов: добавление полосы любого вида (кроме уже
+    присутствующих одиночных — ReportTitle/PageHeader/ColumnHeader/ColumnFooter/PageFooter/
+    ReportSummary/Overlay), удаление, переименование и правка высоты выделенной полосы
+    (`IFastReportService.RenameBand`/`SetBandHeight`).
+  - *Источники данных* — панель внизу окна: именованные примерные таблицы (CSV-текст:
+    первая строка — столбцы, дальше — строки), привязываются к полосе `Data` через
+    комбобокс в свойствах полосы (`IFastReportService.SetDataSource`/`AssignBandDataSource`).
+    Данные — только для дизайна, в `.frx` не сохраняются (см. «Известные риски»).
+  - *Выражения `[Field]`* — синтаксис `[Источник.Колонка]` пишется прямо в `TextObject.Text`
+    (панель свойств уже писала туда текст с этапа 2, ничего дополнительно готовить не
+    нужно); кнопка «Вставить поле» в панели свойств лишь дописывает выражение в конец текста
+    по выбранным источнику/колонке. Вычисляется на `Report.Prepare()` — уже вызывался в
+    `PreviewService`/`ExportService`.
 - **Этап 4 — продукт:** расширенное меню Файл (недавние файлы, шаблоны нового документа),
   undo/redo, копирование/вставка, статус-бар, линейки, экспорт, unit-тесты ViewModel.
 
@@ -118,6 +131,28 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
 - `LineObject`: нет `StartPoint/EndPoint/LineWidth/LineColor`; линия настраивается через `Border.Width/Style/Color`, направление — `Diagonal`;
 - PDF-экспорта в OpenSource нет (есть отдельный плагин `FastReport.OpenSource.Export.PdfSimple`);
 - цвет текста — `TextObject.TextColor`, выравнивание — `HorzAlign`/`VertAlign`, скруглённый прямоугольник — `ShapeKind.RoundRectangle`.
+- источник данных регистрируется через `Report.RegisterData(DataTable/DataSet/IEnumerable, string name)`,
+  извлекается обратно — `Report.GetDataSource(name)`; привязывается к полосе —
+  `DataBand.DataSource = source`;
+- **зарегистрированный источник данных по умолчанию `Enabled == false`** — без явного
+  `source.Enabled = true` присваивание `DataBand.DataSource` молча не сохраняется (геттер/
+  сеттер откатывает на `null`). В официальной XML-документации это только предупреждение
+  без деталей — подтверждено эмпирически (см. `FastReportServiceTests.AssignBandDataSource_*`);
+- `Dictionary.ClearRegisteredData()` — штатный способ снять все зарегистрированные источники
+  разом перед их пересборкой (используется вместо точечного `UnregisterData`);
+- выражения пишутся буквально как `[ИмяИсточника.Колонка]` внутри `TextObjectBase.Text`
+  (`AllowExpressions` по умолчанию `true`, отдельно включать не нужно — проверено тестом);
+  вычисляются только на `Report.Prepare()`, не в момент присвоения `.Text`.
+- **`GroupFooterBand` и `ChildBand` — не самостоятельные полосы страницы.** В отличие от
+  `GroupHeaderBand` (штатно добавляется в `page.Bands.Add(...)`, подтверждено примером в
+  доке), `GroupFooterBand` привязывается только через `GroupHeaderBand.GroupFooter`, а
+  `ChildBand` — через `BandBase.Child` любой другой полосы. Прямое добавление в
+  `page.Bands` валится в рантайме с `FastReport.Utils.ParentException: Object of type
+  ReportPage cannot contain objects of type GroupFooterBand` — не ловится на этапе
+  компиляции. `FastReportService.AddBand` бросает `NotSupportedException` для этих двух
+  видов, `ObjectTreeViewModel.BandKindOptions` исключает их из «Добавить полосу» —
+  полноценная поддержка вложенных полос (выбор родительской полосы для футера группы/
+  child-band) осталась за рамками этапа 3.
 
 ## Известные риски
 
@@ -125,3 +160,9 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
    для визуального дизайна.
 2. Набор экспортеров OpenSource-версии: ImageExport, HTMLExport подтверждены; PDF — только через плагин.
 3. UI-функции FastReport (диалоги данных) в OpenSource недоступны — реализуем свои.
+4. Источники данных, заданные в дизайнере (этап 3), — это примерные данные для превью,
+   а не подключение к реальному источнику: они не сохраняются в `.frx` и теряются при
+   `CreateNew()`/`Load()`. После повторного открытия файла источники нужно завести заново
+   (сами выражения `[Источник.Колонка]` в тексте объектов при этом сохраняются, т.к. это
+   просто строка `TextObject.Text`). Появление импорта/подключения к реальным данным —
+   вне рамок этапа 3.

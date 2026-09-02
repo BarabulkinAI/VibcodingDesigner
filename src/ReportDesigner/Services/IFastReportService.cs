@@ -28,6 +28,8 @@ public interface IFastReportService
     // --- Полосы ---
     string AddBand(BandKind kind, float heightCm = 2f, string? bandName = null);
     void RemoveBand(string bandName);
+    void RenameBand(string oldName, string newName);
+    void SetBandHeight(string bandName, float heightCm);
 
     // --- Объекты ---
     string AddObject(DesignObjectType type, float leftCm, float topCm, float widthCm, float heightCm, string? bandName = null);
@@ -58,4 +60,16 @@ public interface IFastReportService
     void SendToBack(string objectName);
     void MoveForward(string objectName);
     void MoveBackward(string objectName);
+
+    // --- Источники данных ---
+    IReadOnlyList<string> GetDataSourceNames();
+    IReadOnlyList<string> GetDataSourceColumns(string name);
+    /// <summary>Создаёт источник данных с указанным именем или полностью заменяет его
+    /// содержимое, если источник с таким именем уже есть.</summary>
+    void SetDataSource(string name, IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string>> rows);
+    void RemoveDataSource(string name);
+    void RenameDataSource(string oldName, string newName);
+    /// <summary>Привязывает источник данных к полосе данных (<see cref="BandKind.Data"/>).
+    /// <paramref name="dataSourceName"/> = null — отвязывает источник.</summary>
+    void AssignBandDataSource(string bandName, string? dataSourceName);
 }

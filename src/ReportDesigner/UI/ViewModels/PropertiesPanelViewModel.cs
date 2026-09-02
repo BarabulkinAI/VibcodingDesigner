@@ -55,6 +55,15 @@ public partial class PropertiesPanelViewModel : ViewModelBase
     [ObservableProperty] public partial DesignTextAlign HorizontalAlign { get; set; }
     [ObservableProperty] public partial DesignVerticalAlign VerticalAlign { get; set; }
 
+    /// <summary>Источники данных для вставки выражения <c>[Источник.Колонка]</c> в текст —
+    /// список актуален всегда (не только при выделенном текстовом объекте), т.к. это
+    /// документ-уровневая информация, а не свойство конкретного объекта.</summary>
+    [ObservableProperty] public partial IReadOnlyList<string> AvailableDataSources { get; set; } = Array.Empty<string>();
+    [ObservableProperty] public partial bool HasDataSources { get; set; }
+    [ObservableProperty] public partial string? SelectedFieldSource { get; set; }
+    [ObservableProperty] public partial IReadOnlyList<string> AvailableFieldColumns { get; set; } = Array.Empty<string>();
+    [ObservableProperty] public partial string? SelectedFieldColumn { get; set; }
+
     [ObservableProperty] public partial bool ShowBorder { get; set; }
     [ObservableProperty] public partial double BorderWidthCm { get; set; }
     [ObservableProperty] public partial string BorderColorHex { get; set; } = "#000000";
@@ -92,6 +101,11 @@ public partial class PropertiesPanelViewModel : ViewModelBase
         _isRefreshing = true;
         try
         {
+            AvailableDataSources = _service.GetDataSourceNames();
+            HasDataSources = AvailableDataSources.Count > 0;
+            if (SelectedFieldSource is { } source && !AvailableDataSources.Contains(source))
+                SelectedFieldSource = null;
+
             var found = _designSurface.FindSelectedObject();
             _currentObjectName = found?.Object.Name;
             HasSelection = found is not null;
@@ -220,6 +234,22 @@ public partial class PropertiesPanelViewModel : ViewModelBase
         if (_isRefreshing || _currentObjectName is not { } name) return;
         _service.SetVerticalAlign(name, value);
         _designSurface.CommitChange();
+    }
+
+    partial void OnSelectedFieldSourceChanged(string? value)
+    {
+        AvailableFieldColumns = value is null ? Array.Empty<string>() : _service.GetDataSourceColumns(value);
+        SelectedFieldColumn = null;
+    }
+
+    /// <summary>Дописывает выражение <c>[Источник.Колонка]</c> в конец текста — без учёта
+    /// позиции курсора (Avalonia TextBox не даёт удобного биндинга каретки без code-behind,
+    /// сознательное упрощение MVP). Дальше срабатывает уже существующий OnTextChanged.</summary>
+    [RelayCommand]
+    private void InsertField()
+    {
+        if (!IsTextObject || SelectedFieldSource is not { } source || SelectedFieldColumn is not { } column) return;
+        Text += $"[{source}.{column}]";
     }
 
     // ------------------------------------------------------------------

@@ -30,8 +30,8 @@ public partial class ObjectTreeView : UserControl
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(ObjectTreeViewModel.SelectedNode)) return;
-        // Изменение SelectedNode пришло как следствие клика в самом дереве (см. OnTreeSelectionChanged
+        if (e.PropertyName is not (nameof(ObjectTreeViewModel.SelectedNode) or nameof(ObjectTreeViewModel.SelectedBandNode))) return;
+        // Изменение пришло как следствие клика в самом дереве (см. OnTreeSelectionChanged
         // ниже) — не нужно синхронно писать обратно в Tree.SelectedItem изнутри того же
         // SelectionChanged, который это изменение и вызвал (реентрантная запись в состояние
         // выделения TreeView прямо во время его же обработки — именно так падало приложение при
@@ -41,7 +41,7 @@ public partial class ObjectTreeView : UserControl
         if (DataContext is not ObjectTreeViewModel vm) return;
 
         _syncingFromViewModel = true;
-        Tree.SelectedItem = vm.SelectedNode;
+        Tree.SelectedItem = (object?)vm.SelectedNode ?? vm.SelectedBandNode;
         _syncingFromViewModel = false;
     }
 
@@ -52,6 +52,7 @@ public partial class ObjectTreeView : UserControl
 
         _syncingFromTree = true;
         vm.SelectedNode = Tree.SelectedItem as ObjectTreeObjectNode;
+        vm.SelectedBandNode = Tree.SelectedItem as ObjectTreeBandNode;
         _syncingFromTree = false;
     }
 }

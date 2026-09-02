@@ -31,6 +31,27 @@
             <Button Content="⬇⬇" ToolTip.Tip="На задний план" Command="{Binding SendToBackCommand}"/>
         </StackPanel>
 
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="4,0,4,4" Spacing="2">
+            <ComboBox ItemsSource="{Binding BandKindOptions}" SelectedItem="{Binding SelectedKindToAdd}" Width="120"/>
+            <Button Content="Добавить полосу" Command="{Binding AddBandCommand}" IsEnabled="{Binding CanAddSelectedKind}"/>
+            <Button Content="Удалить полосу" Command="{Binding RemoveSelectedBandCommand}" IsEnabled="{Binding IsBandSelected}"/>
+        </StackPanel>
+
+        <StackPanel DockPanel.Dock="Bottom" Margin="4" Spacing="4" IsVisible="{Binding IsBandSelected}">
+            <TextBlock Text="Свойства полосы" FontWeight="SemiBold"/>
+            <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="4" RowSpacing="4">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Имя" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="{Binding BandNameEdit}"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Высота, см" VerticalAlignment="Center"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding BandHeightCm}"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Источник данных" VerticalAlignment="Center"
+                           IsVisible="{Binding IsDataBandSelected}"/>
+                <ComboBox Grid.Row="2" Grid.Column="1" IsVisible="{Binding IsDataBandSelected}"
+                          ItemsSource="{Binding AvailableDataSourceOptions}"
+                          SelectedItem="{Binding SelectedBandDataSource}"/>
+            </Grid>
+        </StackPanel>
+
         <TreeView Name="Tree" ItemsSource="{Binding Bands}"/>
     </DockPanel>
 

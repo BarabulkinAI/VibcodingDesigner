@@ -1,3 +1,4 @@
+using System.Data;
 using System.Drawing;
 using FastReport;
 using FastReport.Utils;
@@ -15,6 +16,17 @@ public class FastReportService : IFastReportService
     private string? _currentFilePath;
     private bool _isDirty;
 
+    /// <summary>Определения источников данных, заданных в дизайнере (примерные данные,
+    /// не сохраняются в .frx — см. docs/ARCHITECTURE.md, известные риски).</summary>
+    private readonly List<DataSourceDefinition> _dataSources = new();
+
+    private sealed class DataSourceDefinition
+    {
+        public required string Name { get; set; }
+        public required List<string> Columns { get; set; }
+        public required List<List<string>> Rows { get; set; }
+    }
+
     public Report CurrentReport { get; private set; } = new();
 
     /// <inheritdoc/>
@@ -25,6 +37,7 @@ public class FastReportService : IFastReportService
 
     public void CreateNew()
     {
+        _dataSources.Clear();
         CurrentReport = new Report();
         var page = new ReportPage { Name = EnsureUniqueComponentName("Page") };
         page.PaperHeight = 297; // A4, мм
@@ -44,6 +57,7 @@ public class FastReportService : IFastReportService
 
     public void Load(string path)
     {
+        _dataSources.Clear();
         var report = new Report();
         report.Load(path); // FastReport сам пересоберёт зависимости
         CurrentReport = report;
@@ -71,6 +85,17 @@ public class FastReportService : IFastReportService
 
     public string AddBand(BandKind kind, float heightCm = 2f, string? bandName = null)
     {
+        // GroupFooterBand и ChildBand в FastReport не бывают самостоятельными полосами
+        // страницы — это вложенные полосы (GroupHeaderBand.GroupFooter / BandBase.Child),
+        // добавление их напрямую в page.Bands валится с FastReport.Utils.ParentException
+        // ("ReportPage cannot contain objects of type ..."). У этого дизайнера пока нет
+        // UI для выбора родительской полосы, поэтому такие виды здесь не поддерживаются —
+        // в отличие от GroupHeaderBand, который в page.Bands добавляется штатно.
+        if (kind is BandKind.GroupFooter or BandKind.Child)
+            throw new NotSupportedException(
+                $"Полоса вида '{kind}' не может быть добавлена самостоятельно — она " +
+                "привязывается к родительской полосе, управление такими полосами пока не поддерживается.");
+
         var page = GetFirstPage();
         var height = heightCm * Units.Centimeters;
 
@@ -101,6 +126,22 @@ public class FastReportService : IFastReportService
         var band = EnumerateAllBands(page).FirstOrDefault(b => b.Name == bandName)
             ?? throw new KeyNotFoundException($"Полоса '{bandName}' не найдена.");
         page.RemoveChild(band);
+        _isDirty = true;
+    }
+
+    public void RenameBand(string oldName, string newName)
+    {
+        var band = FindBand(oldName);
+        if (newName != oldName && ComponentExists(newName))
+            throw new InvalidOperationException($"Имя '{newName}' уже используется.");
+        band.Name = newName;
+        _isDirty = true;
+    }
+
+    public void SetBandHeight(string bandName, float heightCm)
+    {
+        var band = FindBand(bandName);
+        band.Height = heightCm * Units.Centimeters;
         _isDirty = true;
     }
 
@@ -495,5 +536,111 @@ public class FastReportService : IFastReportService
             }
         }
         return false;
+    }
+
+    // ------------------------------------------------------------------
+    // Источники данных
+    // ------------------------------------------------------------------
+
+    public IReadOnlyList<string> GetDataSourceNames() => _dataSources.Select(d => d.Name).ToList();
+
+    public IReadOnlyList<string> GetDataSourceColumns(string name) =>
+        FindDataSource(name).Columns.ToList();
+
+    public void SetDataSource(string name, IReadOnlyList<string> columns, IReadOnlyList<IReadOnlyList<string>> rows)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Имя источника данных не может быть пустым.", nameof(name));
+
+        var def = new DataSourceDefinition
+        {
+            Name = name,
+            Columns = columns.ToList(),
+            Rows = rows.Select(r => r.ToList()).ToList(),
+        };
+
+        var existing = _dataSources.FirstOrDefault(d => d.Name == name);
+        if (existing != null) _dataSources.Remove(existing);
+        _dataSources.Add(def);
+
+        RegisterDataSourcesIntoReport();
+        _isDirty = true;
+    }
+
+    public void RemoveDataSource(string name)
+    {
+        _dataSources.Remove(FindDataSource(name));
+        RegisterDataSourcesIntoReport();
+        _isDirty = true;
+    }
+
+    public void RenameDataSource(string oldName, string newName)
+    {
+        var def = FindDataSource(oldName);
+        if (newName != oldName && _dataSources.Any(d => d.Name == newName))
+            throw new InvalidOperationException($"Источник данных '{newName}' уже существует.");
+
+        def.Name = newName;
+        RegisterDataSourcesIntoReport(renamedFrom: oldName, renamedTo: newName);
+        _isDirty = true;
+    }
+
+    public void AssignBandDataSource(string bandName, string? dataSourceName)
+    {
+        var band = FindBand(bandName) as DataBand
+            ?? throw new InvalidOperationException($"Полоса '{bandName}' не является полосой данных.");
+
+        band.DataSource = dataSourceName is null
+            ? null
+            : CurrentReport.GetDataSource(dataSourceName)
+                ?? throw new KeyNotFoundException($"Источник данных '{dataSourceName}' не найден.");
+        _isDirty = true;
+    }
+
+    private DataSourceDefinition FindDataSource(string name) =>
+        _dataSources.FirstOrDefault(d => d.Name == name)
+        ?? throw new KeyNotFoundException($"Источник данных '{name}' не найден.");
+
+    /// <summary>
+    /// Пересобирает все зарегистрированные в <see cref="CurrentReport"/> источники данных из
+    /// <see cref="_dataSources"/> с нуля (проще и надёжнее точечных Unregister/Register —
+    /// источников всегда немного). Перед очисткой запоминает, какие DataBand на какой источник
+    /// были привязаны (по имени), и восстанавливает привязку после пересборки — иначе, например,
+    /// правка строк одного источника молча отвязала бы данные от всех полос. При переименовании
+    /// источника (<paramref name="renamedFrom"/> → <paramref name="renamedTo"/>) привязка,
+    /// сделанная под старым именем, переносится на новое.
+    /// </summary>
+    private void RegisterDataSourcesIntoReport(string? renamedFrom = null, string? renamedTo = null)
+    {
+        var page = CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault();
+        var bandAssignments = new List<(DataBand Band, string SourceName)>();
+        if (page != null)
+        {
+            foreach (var band in EnumerateAllBands(page).OfType<DataBand>())
+            {
+                if (band.DataSource is not { } ds) continue;
+                var sourceName = ds.Name == renamedFrom ? renamedTo! : ds.Name;
+                bandAssignments.Add((band, sourceName));
+            }
+        }
+
+        CurrentReport.Dictionary.ClearRegisteredData();
+
+        foreach (var def in _dataSources)
+        {
+            var table = new DataTable(def.Name);
+            foreach (var column in def.Columns)
+                table.Columns.Add(column, typeof(string));
+            foreach (var row in def.Rows)
+                table.Rows.Add(row.Cast<object>().ToArray());
+            CurrentReport.RegisterData(table, def.Name);
+            // По умолчанию зарегистрированный источник Enabled == false, и DataBand молча
+            // отказывается его принять (DataBand.DataSource остаётся null) — проверено
+            // эмпирически, в XML-документации FastReport только предупреждение без деталей.
+            CurrentReport.GetDataSource(def.Name)!.Enabled = true;
+        }
+
+        foreach (var (band, sourceName) in bandAssignments)
+            band.DataSource = CurrentReport.GetDataSource(sourceName);
     }
 }

@@ -18,6 +18,9 @@ public sealed class ObjectTreeObjectNode
 public sealed class ObjectTreeBandNode
 {
     public required string Name { get; init; }
+    public required BandKind Kind { get; init; }
+    public required float HeightPx { get; init; }
+    public string? DataSourceName { get; init; }
     public required string DisplayName { get; init; }
     public required IReadOnlyList<ObjectTreeObjectNode> Objects { get; init; }
 }
@@ -30,12 +33,46 @@ public sealed class ObjectTreeBandNode
 /// </summary>
 public partial class ObjectTreeViewModel : ViewModelBase
 {
+    /// <summary>Полосы, которых на странице может быть только одна — «Добавить» для них
+    /// заблокировано, пока такая полоса уже присутствует в снимке.</summary>
+    private static readonly HashSet<BandKind> SingletonBandKinds = new()
+    {
+        BandKind.ReportTitle, BandKind.PageHeader, BandKind.ColumnHeader,
+        BandKind.ColumnFooter, BandKind.PageFooter, BandKind.ReportSummary, BandKind.Overlay,
+    };
+
+    private const string NoDataSourceOption = "(нет)";
+
     private readonly IFastReportService _service;
     private readonly DesignSurfaceViewModel _designSurface;
     private bool _syncingSelection;
+    private bool _isRefreshingBand;
+    /// <summary>Новое имя переименованной полосы — используется единственный следующий
+    /// <see cref="RebuildTree"/>, чтобы восстановить выделение под новым именем (иначе оно
+    /// потерялось бы, так как узел ищется по имени, а старое уже не существует).</summary>
+    private string? _pendingBandSelectionName;
 
     [ObservableProperty] public partial IReadOnlyList<ObjectTreeBandNode> Bands { get; set; } = Array.Empty<ObjectTreeBandNode>();
     [ObservableProperty] public partial ObjectTreeObjectNode? SelectedNode { get; set; }
+
+    [ObservableProperty] public partial ObjectTreeBandNode? SelectedBandNode { get; set; }
+    [ObservableProperty] public partial bool IsBandSelected { get; set; }
+    [ObservableProperty] public partial string BandNameEdit { get; set; } = "";
+    [ObservableProperty] public partial double BandHeightCm { get; set; }
+    [ObservableProperty] public partial bool IsDataBandSelected { get; set; }
+    [ObservableProperty] public partial string SelectedBandDataSource { get; set; } = NoDataSourceOption;
+    [ObservableProperty] public partial IReadOnlyList<string> AvailableDataSourceOptions { get; set; } = new[] { NoDataSourceOption };
+
+    [ObservableProperty] public partial BandKind SelectedKindToAdd { get; set; } = BandKind.Data;
+    [ObservableProperty] public partial bool CanAddSelectedKind { get; set; } = true;
+
+    /// <summary>GroupFooter и Child исключены: в FastReport это не самостоятельные полосы
+    /// страницы, а вложенные (привязываются к родительской полосе) — см.
+    /// <see cref="IFastReportService.AddBand"/>. Добавлять их через этот комбобокс нельзя,
+    /// пока в дизайнере нет UI для выбора родительской полосы.</summary>
+    public IReadOnlyList<BandKind> BandKindOptions { get; } = Enum.GetValues<BandKind>()
+        .Where(k => k is not (BandKind.GroupFooter or BandKind.Child))
+        .ToList();
 
     public ObjectTreeViewModel(IFastReportService service, DesignSurfaceViewModel designSurface)
     {
@@ -61,6 +98,10 @@ public partial class ObjectTreeViewModel : ViewModelBase
             _designSurface.SelectedObjectName = value?.Name;
     }
 
+    partial void OnSelectedBandNodeChanged(ObjectTreeBandNode? value) => RefreshBandFields();
+
+    partial void OnSelectedKindToAddChanged(BandKind value) => RefreshCanAddSelectedKind();
+
     private void SyncSelectedNodeFromDesignSurface()
     {
         if (SelectedNode?.Name == _designSurface.SelectedObjectName) return;
@@ -72,6 +113,37 @@ public partial class ObjectTreeViewModel : ViewModelBase
         _syncingSelection = false;
     }
 
+    private void RefreshBandFields()
+    {
+        _isRefreshingBand = true;
+        try
+        {
+            IsBandSelected = SelectedBandNode is not null;
+            BandNameEdit = SelectedBandNode?.Name ?? "";
+            IsDataBandSelected = SelectedBandNode?.Kind == BandKind.Data;
+
+            if (SelectedBandNode is { } node)
+            {
+                var current = Bands.First(b => b.Name == node.Name);
+                BandHeightCm = Math.Round(UnitConverter.PxToCm(current.HeightPx), 2);
+                SelectedBandDataSource = current.DataSourceName ?? NoDataSourceOption;
+            }
+            else
+            {
+                BandHeightCm = 0;
+                SelectedBandDataSource = NoDataSourceOption;
+            }
+        }
+        finally
+        {
+            _isRefreshingBand = false;
+        }
+    }
+
+    private void RefreshCanAddSelectedKind() =>
+        CanAddSelectedKind = !SingletonBandKinds.Contains(SelectedKindToAdd)
+            || Bands.All(b => b.Kind != SelectedKindToAdd);
+
     private void RebuildTree()
     {
         var snapshot = _designSurface.Snapshot;
@@ -82,6 +154,9 @@ public partial class ObjectTreeViewModel : ViewModelBase
             : page.Bands.Select(b => new ObjectTreeBandNode
             {
                 Name = b.Name,
+                Kind = b.Kind,
+                HeightPx = b.Height,
+                DataSourceName = b.DataSourceName,
                 DisplayName = $"{BandKindLabel(b.Kind)} ({b.Name})",
                 Objects = b.Objects.Select(o => new ObjectTreeObjectNode
                 {
@@ -90,7 +165,16 @@ public partial class ObjectTreeViewModel : ViewModelBase
                 }).ToList(),
             }).ToList();
 
+        AvailableDataSourceOptions = new[] { NoDataSourceOption }.Concat(_service.GetDataSourceNames()).ToList();
+
         SyncSelectedNodeFromDesignSurface();
+
+        var lookupName = _pendingBandSelectionName ?? SelectedBandNode?.Name;
+        _pendingBandSelectionName = null;
+        SelectedBandNode = lookupName is { } name
+            ? Bands.FirstOrDefault(b => b.Name == name)
+            : null;
+        RefreshCanAddSelectedKind();
     }
 
     private static string BandKindLabel(BandKind kind) => kind switch
@@ -147,6 +231,49 @@ public partial class ObjectTreeViewModel : ViewModelBase
     {
         if (SelectedNode is not { } node) return;
         _service.MoveBackward(node.Name);
+        _designSurface.CommitChange();
+    }
+
+    // ------------------------------------------------------------------
+    // Управление полосами
+    // ------------------------------------------------------------------
+
+    [RelayCommand]
+    private void AddBand()
+    {
+        _service.AddBand(SelectedKindToAdd, 2f);
+        _designSurface.CommitChange();
+    }
+
+    [RelayCommand]
+    private void RemoveSelectedBand()
+    {
+        if (SelectedBandNode is not { } node) return;
+        _service.RemoveBand(node.Name);
+        SelectedBandNode = null;
+        _designSurface.CommitChange();
+    }
+
+    partial void OnBandNameEditChanged(string value)
+    {
+        if (_isRefreshingBand || SelectedBandNode is not { } node) return;
+        if (string.IsNullOrWhiteSpace(value) || value == node.Name) return;
+        _service.RenameBand(node.Name, value);
+        _pendingBandSelectionName = value;
+        _designSurface.CommitChange();
+    }
+
+    partial void OnBandHeightCmChanged(double value)
+    {
+        if (_isRefreshingBand || SelectedBandNode is not { } node) return;
+        _service.SetBandHeight(node.Name, (float)value);
+        _designSurface.CommitChange();
+    }
+
+    partial void OnSelectedBandDataSourceChanged(string value)
+    {
+        if (_isRefreshingBand || SelectedBandNode is not { } node) return;
+        _service.AssignBandDataSource(node.Name, value == NoDataSourceOption ? null : value);
         _designSurface.CommitChange();
     }
 }

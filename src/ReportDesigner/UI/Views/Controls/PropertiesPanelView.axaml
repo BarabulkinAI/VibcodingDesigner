@@ -52,6 +52,15 @@
                         <ComboBox ItemsSource="{Binding HorizontalAlignOptions}" SelectedItem="{Binding HorizontalAlign}" Width="100"/>
                         <ComboBox ItemsSource="{Binding VerticalAlignOptions}" SelectedItem="{Binding VerticalAlign}" Width="100"/>
                     </StackPanel>
+
+                    <StackPanel Spacing="4" IsVisible="{Binding HasDataSources}">
+                        <TextBlock Text="Вставить поле"/>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <ComboBox ItemsSource="{Binding AvailableDataSources}" SelectedItem="{Binding SelectedFieldSource}" Width="100"/>
+                            <ComboBox ItemsSource="{Binding AvailableFieldColumns}" SelectedItem="{Binding SelectedFieldColumn}" Width="100"/>
+                            <Button Content="Вставить" Command="{Binding InsertFieldCommand}"/>
+                        </StackPanel>
+                    </StackPanel>
                 </StackPanel>
 
                 <StackPanel Spacing="4" IsVisible="{Binding IsShapeObject}">

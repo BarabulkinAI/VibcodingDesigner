@@ -19,6 +19,7 @@ public partial class MainViewModel : ViewModelBase
     public DesignSurfaceViewModel DesignSurface { get; }
     public ObjectTreeViewModel ObjectTree { get; }
     public PropertiesPanelViewModel PropertiesPanel { get; }
+    public DataSourcesViewModel DataSources { get; }
 
     public Bitmap? PreviewImage { get; private set; }
     public event Action? PreviewChanged;
@@ -40,6 +41,7 @@ public partial class MainViewModel : ViewModelBase
         DesignSurface.DocumentChanged += OnDesignSurfaceDocumentChanged;
         ObjectTree = new ObjectTreeViewModel(_fastReportService, DesignSurface);
         PropertiesPanel = new PropertiesPanelViewModel(_fastReportService, DesignSurface, _filesService);
+        DataSources = new DataSourcesViewModel(_fastReportService, DesignSurface);
 
         RefreshPreview();
         UpdateTitle();

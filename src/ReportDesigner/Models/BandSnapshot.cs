@@ -12,5 +12,8 @@ public sealed class BandSnapshot
     public float Top { get; init; }
     /// <summary>Высота полосы в px.</summary>
     public float Height { get; init; }
+    /// <summary>Имя источника данных, привязанного к полосе (актуально только для
+    /// <see cref="BandKind.Data"/>), либо null, если источник не назначен.</summary>
+    public string? DataSourceName { get; init; }
     public IReadOnlyList<DesignObjectInfo> Objects { get; init; } = Array.Empty<DesignObjectInfo>();
 }

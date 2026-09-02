@@ -261,4 +261,59 @@ public class PropertiesPanelViewModelTests
         Assert.True(panel.IsShapeObject);
         Assert.Equal("", panel.Text); // у фигуры текста нет — поле не должно хранить старое значение
     }
+
+    [Fact]
+    public void AvailableDataSources_ReflectsRegisteredSources()
+    {
+        var (service, surface, panel) = Create();
+        service.SetDataSource("Клиенты", new[] { "Имя", "Город" }, Array.Empty<IReadOnlyList<string>>());
+        surface.CommitChange();
+
+        Assert.Contains("Клиенты", panel.AvailableDataSources);
+        Assert.True(panel.HasDataSources);
+    }
+
+    [Fact]
+    public void SelectingFieldSource_PopulatesAvailableColumns()
+    {
+        var (service, surface, panel) = Create();
+        service.SetDataSource("Клиенты", new[] { "Имя", "Город" }, Array.Empty<IReadOnlyList<string>>());
+        surface.CommitChange();
+
+        panel.SelectedFieldSource = "Клиенты";
+
+        Assert.Equal(new[] { "Имя", "Город" }, panel.AvailableFieldColumns);
+    }
+
+    [Fact]
+    public void InsertField_AppendsBracketExpressionToText()
+    {
+        var (service, surface, panel) = Create();
+        service.SetDataSource("Клиенты", new[] { "Имя" }, Array.Empty<IReadOnlyList<string>>());
+        var name = service.AddObject(DesignObjectType.Text, 0, 0, 4, 1);
+        service.SetText(name, "Имя: ");
+        surface.CommitChange();
+        surface.SelectedObjectName = name;
+
+        panel.SelectedFieldSource = "Клиенты";
+        panel.SelectedFieldColumn = "Имя";
+        panel.InsertFieldCommand.Execute(null);
+
+        Assert.Equal("Имя: [Клиенты.Имя]", panel.Text);
+        Assert.Equal("Имя: [Клиенты.Имя]", service.GetSnapshot().Pages[0].Bands
+            .SelectMany(b => b.Objects).Single(o => o.Name == name).Text);
+    }
+
+    [Fact]
+    public void InsertField_NoOpWhenNothingSelected()
+    {
+        var (service, surface, panel) = Create();
+        service.SetDataSource("Клиенты", new[] { "Имя" }, Array.Empty<IReadOnlyList<string>>());
+        surface.CommitChange();
+        service.MarkSaved("dummy.frx");
+
+        panel.InsertFieldCommand.Execute(null); // ни поле, ни колонка не выбраны
+
+        Assert.False(service.IsDirty);
+    }
 }
