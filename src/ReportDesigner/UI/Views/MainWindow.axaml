@@ -91,8 +91,11 @@
             <GridSplitter Grid.Column="5" Width="4" ResizeDirection="Columns"/>
 
             <Grid Grid.Column="6">
-                <ScrollViewer>
-                    <Image Name="PreviewImage" Stretch="None"/>
+                <ScrollViewer Background="#D8D8D8">
+                    <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
+                            Background="White" BorderBrush="Gray" BorderThickness="1">
+                        <Image Name="PreviewImage" Stretch="None"/>
+                    </Border>
                 </ScrollViewer>
                 <TextBlock Text="{Binding PreviewErrorMessage}" TextWrapping="Wrap" Margin="8"
                            Foreground="Crimson" IsVisible="{Binding PreviewErrorMessage, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>

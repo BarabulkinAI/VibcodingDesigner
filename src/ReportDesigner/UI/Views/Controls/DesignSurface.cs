@@ -43,6 +43,7 @@ public class DesignSurface : Control
     private static readonly IPen GridPen = new Pen(new SolidColorBrush(AvColor.FromRgb(0xEA, 0xEA, 0xEA)), 1);
     private static readonly IPen BandBoundaryPen = new Pen(new SolidColorBrush(AvColor.FromRgb(0xC0, 0xC0, 0xC0)), 1);
     private static readonly IPen SelectionPen = new Pen(Brushes.DodgerBlue, 1.5);
+    private static readonly IBrush BandHighlightBrush = new SolidColorBrush(AvColor.FromArgb(60, 30, 144, 255)); // DodgerBlue, полупрозрачный
     private static readonly IBrush HandleFillBrush = Brushes.White;
     private static readonly IPen HandleBorderPen = new Pen(Brushes.DodgerBlue, 1);
     private static readonly IBrush PictureBrush = new SolidColorBrush(AvColor.FromRgb(0xF0, 0xF0, 0xF0));
@@ -109,6 +110,8 @@ public class DesignSurface : Control
             if (vm.ShowGrid)
                 DrawGrid(context, page.Width, page.Height);
 
+            DrawSelectedBandHighlight(context, vm, page);
+
             foreach (var band in page.Bands)
             {
                 DrawBandBoundary(context, band, page.Width);
@@ -129,6 +132,18 @@ public class DesignSurface : Control
             context.DrawLine(GridPen, new AvPoint(x, 0), new AvPoint(x, height));
         for (var y = 0f; y <= height; y += GridStepPx)
             context.DrawLine(GridPen, new AvPoint(0, y), new AvPoint(width, y));
+    }
+
+    /// <summary>Слегка подсвечивает область полосы, выделенной в дереве объектов (ObjectTree),
+    /// чтобы было видно, какому колонтитулу/полосе документа она соответствует. Рисуется под
+    /// объектами (сразу после сетки), чтобы не перекрывать их содержимое.</summary>
+    private static void DrawSelectedBandHighlight(DrawingContext context, DesignSurfaceViewModel vm, PageSnapshot page)
+    {
+        if (vm.SelectedBandName is not { } name) return;
+        var band = page.Bands.FirstOrDefault(b => b.Name == name);
+        if (band is null) return;
+
+        context.DrawRectangle(BandHighlightBrush, null, new AvRect(0, band.Top, page.Width, band.Height));
     }
 
     private static void DrawBandBoundary(DrawingContext context, BandSnapshot band, float pageWidth)

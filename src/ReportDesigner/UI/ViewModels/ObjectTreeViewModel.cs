@@ -98,7 +98,11 @@ public partial class ObjectTreeViewModel : ViewModelBase
             _designSurface.SelectedObjectName = value?.Name;
     }
 
-    partial void OnSelectedBandNodeChanged(ObjectTreeBandNode? value) => RefreshBandFields();
+    partial void OnSelectedBandNodeChanged(ObjectTreeBandNode? value)
+    {
+        RefreshBandFields();
+        _designSurface.SelectedBandName = value?.Name; // подсветка полосы на канвасе
+    }
 
     partial void OnSelectedKindToAddChanged(BandKind value) => RefreshCanAddSelectedKind();
 
@@ -110,6 +114,8 @@ public partial class ObjectTreeViewModel : ViewModelBase
         SelectedNode = _designSurface.SelectedObjectName is { } name
             ? Bands.SelectMany(b => b.Objects).FirstOrDefault(o => o.Name == name)
             : null;
+        if (SelectedNode is not null)
+            SelectedBandNode = null; // выбор объекта на канвасе снимает подсветку полосы
         _syncingSelection = false;
     }
 

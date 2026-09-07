@@ -30,6 +30,10 @@ public partial class DesignSurfaceViewModel : ViewModelBase
 
     [ObservableProperty] public partial DesignSnapshot Snapshot { get; set; }
     [ObservableProperty] public partial string? SelectedObjectName { get; set; }
+    /// <summary>Имя полосы, выделенной в дереве объектов — канвас подсвечивает её область слегка
+    /// заливкой, чтобы было видно, какому колонтитулу/полосе документа она соответствует.
+    /// Заполняется снаружи (ObjectTreeViewModel), сам канвас полосы не выделяет.</summary>
+    [ObservableProperty] public partial string? SelectedBandName { get; set; }
     [ObservableProperty] public partial RectangleF? PreviewBoundsOverridePx { get; set; }
     [ObservableProperty] public partial double Zoom { get; set; } = 1.0;
     [ObservableProperty] public partial bool ShowGrid { get; set; } = true;

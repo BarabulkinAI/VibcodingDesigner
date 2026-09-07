@@ -306,4 +306,40 @@ public class ObjectTreeViewModelTests
         var band = service.GetSnapshot().Pages[0].Bands.Single(b => b.Name == titleBand);
         Assert.Null(band.DataSourceName); // не-Data полоса не может иметь источник — тихо проигнорировано
     }
+
+    [Fact]
+    public void SelectingBandNode_HighlightsItOnCanvas()
+    {
+        var (_, surface, tree) = Create();
+        var band = tree.Bands[0];
+
+        tree.SelectedBandNode = band;
+
+        Assert.Equal(band.Name, surface.SelectedBandName);
+    }
+
+    [Fact]
+    public void DeselectingBandNode_ClearsCanvasHighlight()
+    {
+        var (_, surface, tree) = Create();
+        tree.SelectedBandNode = tree.Bands[0];
+
+        tree.SelectedBandNode = null;
+
+        Assert.Null(surface.SelectedBandName);
+    }
+
+    [Fact]
+    public void SelectingObjectOnCanvas_ClearsBandHighlight()
+    {
+        var (service, surface, tree) = Create();
+        var name = service.AddObject(DesignObjectType.Shape, 0, 0, 2, 2);
+        surface.CommitChange();
+        tree.SelectedBandNode = tree.Bands.Single(b => b.Name == DataBandName(service));
+
+        surface.SelectedObjectName = name;
+
+        Assert.Null(tree.SelectedBandNode);
+        Assert.Null(surface.SelectedBandName);
+    }
 }
