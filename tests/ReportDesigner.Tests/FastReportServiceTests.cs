@@ -376,6 +376,43 @@ public class FastReportServiceTests
         Assert.Equal(new[] { "Иван", "Ольга" }, texts);
     }
 
+    /// <summary>
+    /// Регрессия: источники данных не сохраняются в .frx (см. известные ограничения в
+    /// ARCHITECTURE.md), но сама привязка DataBand.DataSource и компонент TableDataSource
+    /// сериализуются как часть Report — после Load() DataBand ссылался на "отключённый от
+    /// данных" источник, и Report.Prepare() падал с DataTableException прямо из
+    /// DataBand.InitDataSource(), даже без единого [Field]-выражения. Воспроизведено вручную
+    /// пользователем при обычном открытии сохранённого файла (не придуманный edge case).
+    /// </summary>
+    [Fact]
+    public void Load_DetachesStaleDataSourceFromBand_PrepareDoesNotThrow()
+    {
+        var service = new FastReportService();
+        service.CreateNew();
+        service.SetDataSource("Источник", new[] { "Столбец1" }, new[] { new[] { "значение1" } });
+        var dataBand = DataBandName(service);
+        service.AssignBandDataSource(dataBand, "Источник");
+
+        var path = Path.Combine(Path.GetTempPath(), $"stale_ds_{Guid.NewGuid():N}.frx");
+        try
+        {
+            service.Save(path);
+
+            var loaded = new FastReportService();
+            loaded.Load(path);
+
+            var band = loaded.GetSnapshot().Pages[0].Bands.Single(b => b.Name == dataBand);
+            Assert.Null(band.DataSourceName); // источник корректно отвязан
+
+            var ex = Record.Exception(() => loaded.CurrentReport.Prepare());
+            Assert.Null(ex);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void SaveAndLoad_RoundTripsContent()
     {

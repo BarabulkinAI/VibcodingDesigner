@@ -5,6 +5,7 @@
         xmlns:viewModels="clr-namespace:ReportDesigner.UI.ViewModels"
         xmlns:controls="clr-namespace:ReportDesigner.UI.Views.Controls"
         xmlns:models="clr-namespace:ReportDesigner.Models"
+        xmlns:conv="clr-namespace:Avalonia.Data.Converters;assembly=Avalonia.Base"
         mc:Ignorable="d" d:DesignWidth="1100" d:DesignHeight="600"
         x:Class="ReportDesigner.Views.MainWindow"
         x:DataType="viewModels:MainViewModel"
@@ -21,11 +22,23 @@
         <Menu DockPanel.Dock="Top">
             <MenuItem Header="Файл">
                 <MenuItem Header="Новый" Command="{Binding NewCommand}" InputGesture="Ctrl+N"/>
+                <MenuItem Header="Создать из шаблона..." Command="{Binding NewFromTemplateCommand}"/>
                 <MenuItem Header="Открыть..." Command="{Binding OpenCommand}" InputGesture="Ctrl+O"/>
+                <MenuItem Header="Недавние файлы" Name="RecentFilesMenuItem"/>
                 <MenuItem Header="Сохранить" Command="{Binding SaveCommand}" InputGesture="Ctrl+S"/>
                 <MenuItem Header="Сохранить как..." Command="{Binding SaveAsCommand}" InputGesture="Ctrl+Shift+S"/>
+                <MenuItem Header="Экспорт">
+                    <MenuItem Header="PNG..." Command="{Binding ExportPngCommand}"/>
+                    <MenuItem Header="HTML..." Command="{Binding ExportHtmlCommand}"/>
+                </MenuItem>
                 <Separator/>
                 <MenuItem Header="Выход" Click="OnExitClick"/>
+            </MenuItem>
+            <MenuItem Header="Правка">
+                <MenuItem Header="Отменить" Command="{Binding DesignSurface.UndoCommand}"
+                          IsEnabled="{Binding DesignSurface.CanUndo}" InputGesture="Ctrl+Z"/>
+                <MenuItem Header="Повторить" Command="{Binding DesignSurface.RedoCommand}"
+                          IsEnabled="{Binding DesignSurface.CanRedo}" InputGesture="Ctrl+Y"/>
             </MenuItem>
         </Menu>
 
@@ -41,25 +54,49 @@
             <Button Content="Обновить превью" Click="OnRefresh" Margin="20,0,0,0"/>
         </StackPanel>
 
+        <Border DockPanel.Dock="Bottom" Padding="8,3" BorderThickness="0,1,0,0" BorderBrush="#D0D0D0" Background="#F0F0F0">
+            <StackPanel Orientation="Horizontal" Spacing="20">
+                <TextBlock Text="Ничего не выделено" IsVisible="{Binding !PropertiesPanel.HasSelection}" Opacity="0.7"/>
+                <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding PropertiesPanel.HasSelection}">
+                    <TextBlock Text="{Binding PropertiesPanel.SelectedTypeLabel}" FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding DesignSurface.SelectedObjectName}" Opacity="0.7"/>
+                </StackPanel>
+                <TextBlock Text="{Binding DesignSurface.CursorPositionText}"/>
+                <TextBlock Text="{Binding DesignSurface.ZoomPercentText}"/>
+                <TextBlock Text="Есть несохранённые изменения" IsVisible="{Binding IsDocumentDirty}" Opacity="0.7"/>
+            </StackPanel>
+        </Border>
+
         <controls:DataSourcesView DockPanel.Dock="Bottom" Height="160" DataContext="{Binding DataSources}"/>
 
         <Grid ColumnDefinitions="200,4,2*,4,260,4,3*">
             <controls:ObjectTreeView Grid.Column="0" DataContext="{Binding ObjectTree}"/>
             <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"/>
 
-            <ScrollViewer Grid.Column="2"
-                          HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Auto">
-                <controls:DesignSurface ViewModel="{Binding DesignSurface}"/>
-            </ScrollViewer>
+            <Grid Grid.Column="2" RowDefinitions="18,*" ColumnDefinitions="18,*">
+                <Border Grid.Row="0" Grid.Column="0" Background="#F0F0F0" BorderBrush="#D0D0D0" BorderThickness="0,0,1,1"/>
+                <controls:RulerView Grid.Row="0" Grid.Column="1" Name="HorizontalRuler"
+                                     Orientation="Horizontal" Zoom="{Binding DesignSurface.Zoom}"/>
+                <controls:RulerView Grid.Row="1" Grid.Column="0" Name="VerticalRuler"
+                                     Orientation="Vertical" Zoom="{Binding DesignSurface.Zoom}"/>
+                <ScrollViewer Grid.Row="1" Grid.Column="1" Name="CanvasScrollViewer"
+                              HorizontalScrollBarVisibility="Auto"
+                              VerticalScrollBarVisibility="Auto">
+                    <controls:DesignSurface ViewModel="{Binding DesignSurface}"/>
+                </ScrollViewer>
+            </Grid>
             <GridSplitter Grid.Column="3" Width="4" ResizeDirection="Columns"/>
 
             <controls:PropertiesPanelView Grid.Column="4" DataContext="{Binding PropertiesPanel}"/>
             <GridSplitter Grid.Column="5" Width="4" ResizeDirection="Columns"/>
 
-            <ScrollViewer Grid.Column="6">
-                <Image Name="PreviewImage" Stretch="None"/>
-            </ScrollViewer>
+            <Grid Grid.Column="6">
+                <ScrollViewer>
+                    <Image Name="PreviewImage" Stretch="None"/>
+                </ScrollViewer>
+                <TextBlock Text="{Binding PreviewErrorMessage}" TextWrapping="Wrap" Margin="8"
+                           Foreground="Crimson" IsVisible="{Binding PreviewErrorMessage, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}"/>
+            </Grid>
         </Grid>
     </DockPanel>
 

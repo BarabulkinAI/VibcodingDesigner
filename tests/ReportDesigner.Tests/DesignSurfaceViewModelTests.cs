@@ -314,4 +314,142 @@ public class DesignSurfaceViewModelTests
         Assert.Equal(original.Y - 1, moved.Y, 1);
         Assert.True(service.IsDirty);
     }
+
+    [Fact]
+    public void UpdateCursorPosition_SetsCmCoordinatesAndText()
+    {
+        var (_, vm) = CreateEmpty();
+
+        vm.UpdateCursorPosition(new PointF(UnitConverter.CmToPx(2f), UnitConverter.CmToPx(3f)));
+
+        Assert.Equal(2.0, vm.CursorXCm!.Value, 1);
+        Assert.Equal(3.0, vm.CursorYCm!.Value, 1);
+        Assert.Contains("2", vm.CursorPositionText);
+        Assert.Contains("3", vm.CursorPositionText);
+    }
+
+    [Fact]
+    public void UpdateCursorPosition_Null_ClearsPosition()
+    {
+        var (_, vm) = CreateEmpty();
+        vm.UpdateCursorPosition(new PointF(10, 10));
+
+        vm.UpdateCursorPosition(null);
+
+        Assert.Null(vm.CursorXCm);
+        Assert.Null(vm.CursorYCm);
+        Assert.Equal("", vm.CursorPositionText);
+    }
+
+    [Fact]
+    public void ZoomChanged_UpdatesZoomPercentText()
+    {
+        var (_, vm) = CreateEmpty();
+
+        vm.Zoom = 1.5;
+
+        Assert.Contains("150", vm.ZoomPercentText);
+    }
+
+    [Fact]
+    public void CopyThenPaste_CreatesDuplicateWithOffset()
+    {
+        var (service, vm) = CreateEmpty();
+        var name = service.AddObject(DesignObjectType.Text, 1f, 0.3f, 3f, 1f);
+        service.SetText(name, "Оригинал");
+        service.SetFont(name, "Calibri", 14f, bold: true, italic: false);
+        vm.CommitChange();
+        vm.SelectedObjectName = name;
+        var originalBounds = BoundsOf(service, name);
+
+        vm.CopySelected();
+        vm.Paste();
+
+        var objects = service.GetSnapshot().Pages[0].Bands.SelectMany(b => b.Objects).ToList();
+        Assert.Equal(2, objects.Count);
+        var pasted = objects.Single(o => o.Name != name);
+
+        Assert.Equal(pasted.Name, vm.SelectedObjectName); // после вставки выделена копия
+        Assert.Equal("Оригинал", pasted.Text);
+        Assert.Equal("Calibri", pasted.FontName);
+        Assert.True(pasted.FontBold);
+        Assert.NotEqual(originalBounds.X, pasted.Bounds.X);
+        Assert.NotEqual(originalBounds.Y, pasted.Bounds.Y);
+    }
+
+    [Fact]
+    public void Paste_WithEmptyClipboard_NoOp()
+    {
+        var (service, vm) = CreateEmpty();
+
+        vm.Paste();
+
+        Assert.Empty(service.GetSnapshot().Pages[0].Bands.SelectMany(b => b.Objects));
+        Assert.False(service.IsDirty);
+    }
+
+    [Fact]
+    public void CopyWithoutSelection_ThenPaste_NoOp()
+    {
+        var (service, vm, name) = CreateWithObject();
+        vm.SelectedObjectName = null; // ничего не выделено
+
+        vm.CopySelected();
+        vm.Paste();
+
+        Assert.Single(service.GetSnapshot().Pages[0].Bands.SelectMany(b => b.Objects)); // остался только исходный
+    }
+
+    [Fact]
+    public void CommitChange_ChecksPointsAndUpdatesCanUndo()
+    {
+        var (service, vm) = CreateEmpty();
+        Assert.False(vm.CanUndo);
+
+        service.AddObject(DesignObjectType.Text, 0, 0, 2, 1);
+        vm.CommitChange();
+
+        Assert.True(vm.CanUndo);
+    }
+
+    [Fact]
+    public void UndoCommand_RefreshesSnapshotAndClearsSelection()
+    {
+        var (service, vm) = CreateEmpty();
+        var name = service.AddObject(DesignObjectType.Text, 0, 0, 2, 1);
+        vm.CommitChange();
+        vm.SelectedObjectName = name;
+
+        vm.UndoCommand.Execute(null);
+
+        Assert.Empty(service.GetSnapshot().Pages[0].Bands.SelectMany(b => b.Objects));
+        Assert.Null(vm.SelectedObjectName);
+        Assert.False(vm.CanUndo);
+        Assert.True(vm.CanRedo);
+    }
+
+    [Fact]
+    public void RedoCommand_ReappliesUndoneChange()
+    {
+        var (service, vm) = CreateEmpty();
+        var name = service.AddObject(DesignObjectType.Text, 0, 0, 2, 1);
+        vm.CommitChange();
+        vm.UndoCommand.Execute(null);
+
+        vm.RedoCommand.Execute(null);
+
+        Assert.Contains(service.GetSnapshot().Pages[0].Bands.SelectMany(b => b.Objects), o => o.Name == name);
+        Assert.True(vm.CanUndo);
+        Assert.False(vm.CanRedo);
+    }
+
+    [Fact]
+    public void Reset_DoesNotEnableUndo()
+    {
+        var (_, vm) = CreateEmpty();
+
+        vm.Reset();
+
+        Assert.False(vm.CanUndo); // New/Open не должны включать "Отменить" сами по себе
+    }
 }

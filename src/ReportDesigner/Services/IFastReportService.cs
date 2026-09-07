@@ -19,6 +19,11 @@ public interface IFastReportService
     void Load(string path);
     void Save(string path);
 
+    /// <summary>Загружает файл как шаблон нового документа: содержимое как у <see cref="Load"/>,
+    /// но документ остаётся в состоянии «Новый» (без пути, без записи в недавние файлы) — первое
+    /// сохранение станет Save As, как и после <see cref="CreateNew"/>.</summary>
+    void LoadAsTemplate(string path);
+
     /// <summary>Фиксирует успешное сохранение: запоминает путь и сбрасывает признак изменённости.</summary>
     void MarkSaved(string path);
 
@@ -72,4 +77,13 @@ public interface IFastReportService
     /// <summary>Привязывает источник данных к полосе данных (<see cref="BandKind.Data"/>).
     /// <paramref name="dataSourceName"/> = null — отвязывает источник.</summary>
     void AssignBandDataSource(string bandName, string? dataSourceName);
+
+    // --- Undo/redo ---
+    bool CanUndo { get; }
+    bool CanRedo { get; }
+    /// <summary>Фиксирует точку в истории отмены — вызывается после каждой завершённой мутации
+    /// документа (UI-слой вызывает это из своей единой точки синхронизации канваса).</summary>
+    void Checkpoint();
+    void Undo();
+    void Redo();
 }

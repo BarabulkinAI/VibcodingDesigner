@@ -22,6 +22,16 @@ public class FilesService : IFilesService
         Patterns = new[] { "*.png", "*.jpg", "*.jpeg", "*.bmp", "*.gif" },
     };
 
+    private static readonly FilePickerFileType PngExportFileType = new("Изображение PNG (*.png)")
+    {
+        Patterns = new[] { "*.png" },
+    };
+
+    private static readonly FilePickerFileType HtmlExportFileType = new("Страница HTML (*.html)")
+    {
+        Patterns = new[] { "*.html" },
+    };
+
     public async Task<string?> PickOpenReportPathAsync()
     {
         var storageProvider = GetStorageProvider();
@@ -60,6 +70,34 @@ public class FilesService : IFilesService
         });
 
         return files.Count > 0 ? files[0].TryGetLocalPath() : null;
+    }
+
+    public async Task<string?> PickExportPngPathAsync(string? suggestedFileName)
+    {
+        var storageProvider = GetStorageProvider();
+        var file = await storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Экспорт в PNG",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "png",
+            FileTypeChoices = new[] { PngExportFileType },
+        });
+
+        return file?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickExportHtmlPathAsync(string? suggestedFileName)
+    {
+        var storageProvider = GetStorageProvider();
+        var file = await storageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Экспорт в HTML",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "html",
+            FileTypeChoices = new[] { HtmlExportFileType },
+        });
+
+        return file?.TryGetLocalPath();
     }
 
     private IStorageProvider GetStorageProvider()

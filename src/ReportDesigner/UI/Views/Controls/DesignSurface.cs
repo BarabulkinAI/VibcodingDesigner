@@ -311,6 +311,13 @@ public class DesignSurface : Control
         var point = ToPagePoint(e.GetPosition(this), vm.Zoom);
         vm.UpdateDrag(point);
         vm.UpdateResize(point);
+        vm.UpdateCursorPosition(point);
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        ViewModel?.UpdateCursorPosition(null);
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
@@ -346,6 +353,30 @@ public class DesignSurface : Control
         base.OnKeyDown(e);
         var vm = ViewModel;
         if (vm is null) return;
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            switch (e.Key)
+            {
+                case Key.C:
+                    vm.CopySelected();
+                    e.Handled = true;
+                    return;
+                case Key.V:
+                    vm.Paste();
+                    e.Handled = true;
+                    return;
+                case Key.Z when e.KeyModifiers.HasFlag(KeyModifiers.Shift):
+                case Key.Y:
+                    vm.RedoCommand.Execute(null);
+                    e.Handled = true;
+                    return;
+                case Key.Z:
+                    vm.UndoCommand.Execute(null);
+                    e.Handled = true;
+                    return;
+            }
+        }
 
         switch (e.Key)
         {

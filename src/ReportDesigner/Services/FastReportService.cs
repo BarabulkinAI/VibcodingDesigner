@@ -1,6 +1,7 @@
 using System.Data;
 using System.Drawing;
 using FastReport;
+using FastReport.Data;
 using FastReport.Utils;
 using ReportDesigner.Models;
 
@@ -27,6 +28,25 @@ public class FastReportService : IFastReportService
         public required List<List<string>> Rows { get; set; }
     }
 
+    // ------------------------------------------------------------------
+    // Undo/redo
+    // ------------------------------------------------------------------
+
+    private const int MaxUndoEntries = 50;
+
+    /// <summary>Снимок документа целиком: сериализованный Report (Save/Load через MemoryStream —
+    /// надёжнее и проще, чем диффать DesignSnapshot) плюс отдельно копия источников данных, т.к.
+    /// они не входят в сериализацию .frx (см. известное ограничение источников данных выше).</summary>
+    private sealed record UndoEntry(byte[] ReportBytes, List<DataSourceDefinition> DataSources);
+
+    private readonly List<UndoEntry> _undoStack = new();
+    private readonly List<UndoEntry> _redoStack = new();
+    /// <summary>Снимок состояния на момент последнего Checkpoint()/Undo()/Redo() — используется
+    /// как "состояние до" следующей мутации: Checkpoint() вызывается ПОСЛЕ того как мутация уже
+    /// произошла, поэтому единственный способ узнать, каким было состояние ДО неё — держать его
+    /// закэшированным с прошлого раза.</summary>
+    private UndoEntry? _lastCommitted;
+
     public Report CurrentReport { get; private set; } = new();
 
     /// <inheritdoc/>
@@ -38,6 +58,7 @@ public class FastReportService : IFastReportService
     public void CreateNew()
     {
         _dataSources.Clear();
+        ResetUndoHistory();
         CurrentReport = new Report();
         var page = new ReportPage { Name = EnsureUniqueComponentName("Page") };
         page.PaperHeight = 297; // A4, мм
@@ -53,15 +74,38 @@ public class FastReportService : IFastReportService
         // Новый документ: пути ещё нет, несохранённых изменений нет.
         _currentFilePath = null;
         _isDirty = false;
+        SeedUndoBaseline();
     }
 
     public void Load(string path)
     {
         _dataSources.Clear();
+        ResetUndoHistory();
         var report = new Report();
         report.Load(path); // FastReport сам пересоберёт зависимости
         CurrentReport = report;
+        // .frx сохраняет источник данных как компонент (TableDataSource) без реальных строк —
+        // при повторной загрузке DataBand.DataSource ссылается на "пустышку", и Prepare() падает
+        // с DataTableException ("Table is not connected to the data"). _dataSources уже пуст
+        // (Clear() выше), поэтому вызов ниже лишь отвязывает и вычищает этот мусор из Dictionary
+        // (тот же метод, что пересобирает источники после SetDataSource/RemoveDataSource).
+        RegisterDataSourcesIntoReport();
         MarkSaved(path);
+        SeedUndoBaseline();
+    }
+
+    public void LoadAsTemplate(string path)
+    {
+        _dataSources.Clear();
+        ResetUndoHistory();
+        var report = new Report();
+        report.Load(path);
+        CurrentReport = report;
+        RegisterDataSourcesIntoReport(); // см. комментарий в Load() выше
+        // В отличие от Load — не запоминаем путь: документ остаётся «Новым», как после CreateNew().
+        _currentFilePath = null;
+        _isDirty = false;
+        SeedUndoBaseline();
     }
 
     public void Save(string path)
@@ -624,7 +668,16 @@ public class FastReportService : IFastReportService
             }
         }
 
-        CurrentReport.Dictionary.ClearRegisteredData();
+        // ClearRegisteredData() только отключает данные от TableDataSource, но не убирает сам
+        // компонент из Dictionary — выражение [Источник.Колонка] в тексте объекта всё ещё
+        // находит его напрямую (в обход DataBand.DataSource) и падает с DataTableException
+        // "Table is not connected to the data" (воспроизведено эмпирически на сценарии
+        // Save → Load: источник, сериализованный в .frx как часть Dictionary, после Load
+        // остаётся там же, но без данных). Поэтому вместо ClearRegisteredData() полностью
+        // удаляем все существующие источники через Dispose() — это касается и источников,
+        // доставшихся из десериализованного файла, а не только созданных в этой сессии.
+        foreach (DataSourceBase existing in CurrentReport.Dictionary.DataSources.Cast<DataSourceBase>().ToList())
+            existing.Dispose();
 
         foreach (var def in _dataSources)
         {
@@ -641,6 +694,110 @@ public class FastReportService : IFastReportService
         }
 
         foreach (var (band, sourceName) in bandAssignments)
-            band.DataSource = CurrentReport.GetDataSource(sourceName);
+        {
+            // ClearRegisteredData() снимает связь TableDataSource с данными, но не убирает сам
+            // компонент из Dictionary — GetDataSource(name) после очистки всё ещё находит
+            // "отключённый" источник (это и есть DataTableException "Table is not connected to
+            // the data" при попытке его использовать). Поэтому переприсоединяем только те
+            // источники, которые реально будут зарегистрированы заново (т.е. есть в
+            // _dataSources) — остальные явно отвязываем, а не полагаемся на то, что
+            // GetDataSource вернёт null.
+            band.DataSource = _dataSources.Any(d => d.Name == sourceName)
+                ? CurrentReport.GetDataSource(sourceName)
+                : null;
+        }
     }
+
+    // ------------------------------------------------------------------
+    // Undo/redo
+    // ------------------------------------------------------------------
+
+    public bool CanUndo => _undoStack.Count > 0;
+    public bool CanRedo => _redoStack.Count > 0;
+
+    /// <summary>
+    /// Вызывается после КАЖДОЙ зафиксированной мутации документа — единственная точка
+    /// интеграции, т.к. все ViewModel (ObjectTree/PropertiesPanel/DataSources/DesignSurface)
+    /// уже мутируют через IFastReportService и синхронизируются через
+    /// DesignSurfaceViewModel.CommitChange(), который вызывает этот метод первым делом.
+    /// Кладёт в стек отмены состояние, закэшированное с ПРЕДЫДУЩЕГО вызова (т.е. состояние ДО
+    /// только что произошедшей мутации), затем кэширует текущее состояние на будущее.
+    /// </summary>
+    public void Checkpoint()
+    {
+        var current = CaptureUndoEntry();
+        if (_lastCommitted is { } previous)
+        {
+            _undoStack.Add(previous);
+            if (_undoStack.Count > MaxUndoEntries)
+                _undoStack.RemoveAt(0);
+            _redoStack.Clear(); // новое действие обнуляет историю повторов
+        }
+        _lastCommitted = current;
+    }
+
+    public void Undo()
+    {
+        if (_undoStack.Count == 0) return;
+
+        var target = _undoStack[^1];
+        _undoStack.RemoveAt(_undoStack.Count - 1);
+        if (_lastCommitted is { } current) _redoStack.Add(current);
+
+        RestoreEntry(target);
+        _lastCommitted = target;
+    }
+
+    public void Redo()
+    {
+        if (_redoStack.Count == 0) return;
+
+        var target = _redoStack[^1];
+        _redoStack.RemoveAt(_redoStack.Count - 1);
+        if (_lastCommitted is { } current) _undoStack.Add(current);
+
+        RestoreEntry(target);
+        _lastCommitted = target;
+    }
+
+    private void ResetUndoHistory()
+    {
+        _undoStack.Clear();
+        _redoStack.Clear();
+        _lastCommitted = null;
+    }
+
+    /// <summary>Кэширует состояние свежесозданного/загруженного документа как точку отсчёта —
+    /// без этого самое первое действие пользователя было бы невозможно отменить (Checkpoint()
+    /// молча пропускает первый вызов, т.к. ему не с чем сравнивать состояние "до").</summary>
+    private void SeedUndoBaseline() => _lastCommitted = CaptureUndoEntry();
+
+    private UndoEntry CaptureUndoEntry()
+    {
+        using var ms = new MemoryStream();
+        CurrentReport.Save(ms);
+        return new UndoEntry(ms.ToArray(), CloneDataSources(_dataSources));
+    }
+
+    private void RestoreEntry(UndoEntry entry)
+    {
+        var report = new Report();
+        using (var ms = new MemoryStream(entry.ReportBytes))
+            report.Load(ms);
+        CurrentReport = report;
+
+        _dataSources.Clear();
+        _dataSources.AddRange(CloneDataSources(entry.DataSources));
+        RegisterDataSourcesIntoReport();
+
+        _isDirty = true;
+    }
+
+    private static List<DataSourceDefinition> CloneDataSources(List<DataSourceDefinition> source) =>
+        source.Select(d => new DataSourceDefinition
+        {
+            Name = d.Name,
+            Columns = d.Columns.ToList(),
+            Rows = d.Rows.Select(r => r.ToList()).ToList(),
+        }).ToList();
 }

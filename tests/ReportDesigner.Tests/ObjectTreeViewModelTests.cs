@@ -284,4 +284,26 @@ public class ObjectTreeViewModelTests
 
         Assert.False(tree.IsDataBandSelected);
     }
+
+    /// <summary>
+    /// Регрессия: Avalonia пересоздаёт AvailableDataSourceOptions на каждый RebuildTree() (новый
+    /// экземпляр списка) и может сбросить SelectedItem комбобокса через биндинг ДАЖЕ когда он
+    /// скрыт (IsVisible=False не отключает биндинг) — вне окна _isRefreshingBand. Раньше это
+    /// валило AssignBandDataSource с InvalidOperationException на любой не-Data полосе.
+    /// Воспроизведено здесь напрямую — так же, как реально сработал сбой у пользователя: полоса
+    /// выделена, значение SelectedBandDataSource меняется без прохода через RefreshBandFields.
+    /// </summary>
+    [Fact]
+    public void SettingBandDataSourceOnNonDataBand_NoOpInsteadOfThrowing()
+    {
+        var (service, _, tree) = Create();
+        service.SetDataSource("Клиенты", new[] { "Имя" }, new[] { new[] { "Иван" } });
+        var titleBand = service.GetSnapshot().Pages[0].Bands[0].Name; // ReportTitle
+        tree.SelectedBandNode = tree.Bands.Single(b => b.Name == titleBand);
+
+        tree.SelectedBandDataSource = "Клиенты"; // как будто Avalonia сбросила SelectedItem мимо guard-а
+
+        var band = service.GetSnapshot().Pages[0].Bands.Single(b => b.Name == titleBand);
+        Assert.Null(band.DataSourceName); // не-Data полоса не может иметь источник — тихо проигнорировано
+    }
 }

@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 using ReportDesigner.UI.ViewModels;
@@ -17,7 +18,49 @@ public partial class MainWindow : Window
         DataContext = _vm;
         _vm.PreviewChanged += () => PreviewImage.Source = _vm.PreviewImage;
         PreviewImage.Source = _vm.PreviewImage;
+        _vm.PropertyChanged += OnViewModelPropertyChanged;
+        RefreshRecentFilesMenu();
+        // У ScrollViewer нет биндируемого свойства текущего Offset (только Offset для
+        // управления им извне) — линейки узнают о прокрутке канваса только так.
+        CanvasScrollViewer.ScrollChanged += (_, _) =>
+        {
+            HorizontalRuler.ScrollOffset = CanvasScrollViewer.Offset.X;
+            VerticalRuler.ScrollOffset = CanvasScrollViewer.Offset.Y;
+        };
         Closing += OnClosing;
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainViewModel.RecentFiles))
+            RefreshRecentFilesMenu();
+    }
+
+    /// <summary>
+    /// Пункты «Недавние файлы» собираются вручную в code-behind, а не через
+    /// MenuItem.ItemsSource + DataTemplate — с динамическим списком путей и компилируемыми
+    /// биндингами (x:DataType на весь файл) это потребовало бы ссылки на VM-команду из шаблона с
+    /// DataContext = string через $parent-навигацию; явное построение здесь проще и надёжнее.
+    /// </summary>
+    private void RefreshRecentFilesMenu()
+    {
+        RecentFilesMenuItem.Items.Clear();
+
+        if (_vm.RecentFiles.Count == 0)
+        {
+            RecentFilesMenuItem.Items.Add(new MenuItem { Header = "(пусто)", IsEnabled = false });
+            return;
+        }
+
+        foreach (var path in _vm.RecentFiles)
+        {
+            RecentFilesMenuItem.Items.Add(new MenuItem
+            {
+                Header = path,
+                Command = _vm.OpenRecentCommand,
+                CommandParameter = path,
+            });
+        }
     }
 
     private void OnRefresh(object? sender, RoutedEventArgs e) => _vm.RefreshPreview();

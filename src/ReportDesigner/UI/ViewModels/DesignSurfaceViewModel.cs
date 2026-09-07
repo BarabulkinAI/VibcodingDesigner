@@ -33,10 +33,24 @@ public partial class DesignSurfaceViewModel : ViewModelBase
     [ObservableProperty] public partial RectangleF? PreviewBoundsOverridePx { get; set; }
     [ObservableProperty] public partial double Zoom { get; set; } = 1.0;
     [ObservableProperty] public partial bool ShowGrid { get; set; } = true;
+    /// <summary>Отформатированный масштаб для статус-бара, обновляется автоматически при
+    /// изменении Zoom.</summary>
+    [ObservableProperty] public partial string ZoomPercentText { get; set; } = "100 %";
+
+    /// <summary>Позиция курсора над канвасом в см (для статус-бара) — null, когда курсор вне
+    /// канваса.</summary>
+    [ObservableProperty] public partial double? CursorXCm { get; set; }
+    [ObservableProperty] public partial double? CursorYCm { get; set; }
+    /// <summary>Готовая для статус-бара строка — пусто, когда курсор вне канваса. Отдельно от
+    /// CursorXCm/CursorYCm, чтобы не тащить форматирование чисел в XAML.</summary>
+    [ObservableProperty] public partial string CursorPositionText { get; set; } = "";
 
     /// <summary>Инструмент, выбранный в Toolbox — следующий клик на канвасе создаст объект
     /// этого типа. Null — обычный режим выделения/перетаскивания.</summary>
     [ObservableProperty] public partial DesignObjectType? PendingToolType { get; set; }
+
+    [ObservableProperty] public partial bool CanUndo { get; set; }
+    [ObservableProperty] public partial bool CanRedo { get; set; }
 
     /// <summary>Вызывается после любой зафиксированной мутации документа (для обновления превью/заголовка).</summary>
     public event Action? DocumentChanged;
@@ -47,12 +61,29 @@ public partial class DesignSurfaceViewModel : ViewModelBase
         Snapshot = _service.GetSnapshot();
     }
 
-    /// <summary>Вызывается после New/Open — сбрасывает выделение и текущий жест.</summary>
-    public void Reset()
+    /// <summary>Вызывается после New/Open — сбрасывает выделение и текущий жест. Не чекпойнтит
+    /// историю отмены (как Undo/Redo) — New/Open уже сбросили её сами и заложили точку отсчёта
+    /// (IFastReportService.CreateNew/Load), лишний Checkpoint() тут задним числом запушил бы эту
+    /// же самую точку отсчёта в стек отмены, включив "Отменить" без единой реальной мутации.</summary>
+    public void Reset() => RefreshFromService(checkpoint: false);
+
+    partial void OnZoomChanged(double value) => ZoomPercentText = $"{value:P0}";
+
+    /// <summary>Вызывается DesignSurface при движении указателя (для статус-бара). null — курсор
+    /// покинул канвас.</summary>
+    public void UpdateCursorPosition(PointF? pagePointPx)
     {
-        ClearGestureState();
-        SelectedObjectName = null;
-        CommitChange();
+        if (pagePointPx is not { } p)
+        {
+            CursorXCm = null;
+            CursorYCm = null;
+            CursorPositionText = "";
+            return;
+        }
+
+        CursorXCm = UnitConverter.PxToCm(p.X);
+        CursorYCm = UnitConverter.PxToCm(p.Y);
+        CursorPositionText = $"X: {CursorXCm:F1} см, Y: {CursorYCm:F1} см";
     }
 
     public (BandSnapshot Band, DesignObjectInfo Object)? FindSelectedObject() =>
@@ -248,18 +279,115 @@ public partial class DesignSurfaceViewModel : ViewModelBase
     }
 
     // ------------------------------------------------------------------
+    // Копирование / вставка (Ctrl+C / Ctrl+V)
+    // ------------------------------------------------------------------
+
+    /// <summary>«Буфер обмена» — не системный Clipboard, а данные выделенного объекта из
+    /// снимка плюс полоса, в которой он был на момент копирования. Вставка не клонирует объект
+    /// FastReport, а создаёт новый через уже протестированный AddObject и переносит свойства
+    /// теми же сеттерами, что использует PropertiesPanelViewModel.</summary>
+    private (BandSnapshot Band, DesignObjectInfo Object)? _clipboard;
+
+    public void CopySelected() => _clipboard = FindSelectedObject();
+
+    public void Paste()
+    {
+        if (_clipboard is not { } clip) return;
+
+        var allBands = Snapshot.Pages.SelectMany(p => p.Bands).ToList();
+        var targetBand = allBands.FirstOrDefault(b => b.Name == clip.Band.Name) ?? allBands.FirstOrDefault();
+        if (targetBand is null) return;
+
+        var offsetPx = UnitConverter.CmToPx(0.5f);
+        var moved = new RectangleF(
+            clip.Object.Bounds.X + offsetPx, clip.Object.Bounds.Y + offsetPx,
+            clip.Object.Bounds.Width, clip.Object.Bounds.Height);
+        var clamped = ResizeGeometry.ClampVertical(moved, targetBand.Height);
+
+        var name = _service.AddObject(clip.Object.Type,
+            UnitConverter.PxToCm(clamped.X), UnitConverter.PxToCm(clamped.Y),
+            UnitConverter.PxToCm(clamped.Width), UnitConverter.PxToCm(clamped.Height),
+            targetBand.Name);
+
+        ApplyClipboardProperties(name, clip.Object);
+
+        SelectedObjectName = name;
+        CommitChange();
+    }
+
+    /// <summary>Картинки не копируются (нет пути передать Bitmap через существующий API без
+    /// записи на диск) — сознательное ограничение MVP.</summary>
+    private void ApplyClipboardProperties(string name, DesignObjectInfo obj)
+    {
+        _service.SetVisible(name, obj.Visible);
+
+        switch (obj.Type)
+        {
+            case DesignObjectType.Text:
+                _service.SetText(name, obj.Text ?? "");
+                _service.SetFont(name, obj.FontName, obj.FontSize, obj.FontBold, obj.FontItalic);
+                _service.SetTextColor(name, obj.TextColor);
+                _service.SetHorizontalAlign(name, obj.HorizontalAlign);
+                _service.SetVerticalAlign(name, obj.VerticalAlign);
+                _service.SetBorder(name, obj.ShowBorder, UnitConverter.PxToCm(obj.BorderWidth), obj.BorderColor);
+                break;
+            case DesignObjectType.Shape:
+                _service.SetShapeKind(name, obj.Shape);
+                _service.SetFillColor(name, obj.FillColor);
+                _service.SetBorder(name, obj.ShowBorder, UnitConverter.PxToCm(obj.BorderWidth), obj.BorderColor);
+                break;
+            case DesignObjectType.Line:
+                _service.SetLineStyle(name, UnitConverter.PxToCm(obj.LineWidth), obj.LineColor);
+                break;
+        }
+    }
+
+    // ------------------------------------------------------------------
     // Внутреннее
     // ------------------------------------------------------------------
 
     /// <summary>
     /// Пересобирает снимок из сервиса и уведомляет подписчиков. Публичный — вызывается не
     /// только изнутри (после жестов/удаления), но и внешними ViewModel (ObjectTree,
-    /// PropertiesPanel), которые мутируют документ напрямую через IFastReportService и должны
-    /// после этого синхронизировать канвас.
+    /// PropertiesPanel, DataSources), которые мутируют документ напрямую через
+    /// IFastReportService и должны после этого синхронизировать канвас. Заодно единственная
+    /// точка, где фиксируется чекпойнт истории отмены (см. IFastReportService.Checkpoint) —
+    /// именно поэтому все мутирующие ViewModel обязаны звать CommitChange после каждой мутации.
     /// </summary>
-    public void CommitChange()
+    public void CommitChange() => RefreshFromService(checkpoint: true);
+
+    [RelayCommand]
+    private void Undo()
     {
+        _service.Undo();
+        RefreshFromService(checkpoint: false);
+    }
+
+    [RelayCommand]
+    private void Redo()
+    {
+        _service.Redo();
+        RefreshFromService(checkpoint: false);
+    }
+
+    private void RefreshFromService(bool checkpoint)
+    {
+        if (checkpoint)
+        {
+            _service.Checkpoint();
+        }
+        else
+        {
+            // Undo/Redo подменяют документ целиком — прежнее выделение и активный жест могли
+            // указывать на объект, которого в восстановленном состоянии уже нет (или который
+            // ещё не существовал).
+            ClearGestureState();
+            SelectedObjectName = null;
+        }
+
         Snapshot = _service.GetSnapshot();
+        CanUndo = _service.CanUndo;
+        CanRedo = _service.CanRedo;
         DocumentChanged?.Invoke();
     }
 

@@ -14,6 +14,8 @@ public class PropertiesPanelViewModelTests
         public Task<string?> PickOpenReportPathAsync() => Task.FromResult<string?>(null);
         public Task<string?> PickSaveReportPathAsync(string? suggestedFileName) => Task.FromResult<string?>(null);
         public Task<string?> PickImagePathAsync() => Task.FromResult(NextImagePath);
+        public Task<string?> PickExportPngPathAsync(string? suggestedFileName) => Task.FromResult<string?>(null);
+        public Task<string?> PickExportHtmlPathAsync(string? suggestedFileName) => Task.FromResult<string?>(null);
     }
 
     private static (FastReportService Service, DesignSurfaceViewModel Surface, PropertiesPanelViewModel Panel)

@@ -270,9 +270,18 @@ public partial class ObjectTreeViewModel : ViewModelBase
         _designSurface.CommitChange();
     }
 
+    /// <summary>
+    /// Кроме обычного guard-а по _isRefreshingBand, здесь ещё и проверка Kind == Data: Avalonia
+    /// сбрасывает SelectedItem комбобокса при смене его ItemsSource (AvailableDataSourceOptions
+    /// пересобирается заново на каждый RebuildTree — новый экземпляр списка) и пишет это обратно
+    /// в SelectedBandDataSource через биндинг ДАЖЕ когда комбобокс скрыт (IsVisible=False не
+    /// отключает биндинг) — вне контролируемого окна _isRefreshingBand в RefreshBandFields().
+    /// Без этой проверки такой сброс на невыделенной полосе данных (например, PageHeader) валил
+    /// AssignBandDataSource с InvalidOperationException — воспроизведено пользователем вручную.
+    /// </summary>
     partial void OnSelectedBandDataSourceChanged(string value)
     {
-        if (_isRefreshingBand || SelectedBandNode is not { } node) return;
+        if (_isRefreshingBand || SelectedBandNode is not { Kind: BandKind.Data } node) return;
         _service.AssignBandDataSource(node.Name, value == NoDataSourceOption ? null : value);
         _designSurface.CommitChange();
     }

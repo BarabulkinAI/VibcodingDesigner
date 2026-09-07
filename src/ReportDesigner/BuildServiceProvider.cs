@@ -20,6 +20,7 @@ public static class BuildServiceProvider
         services.AddSingleton<IHostWindowProvider>(sp => sp.GetRequiredService<HostWindowProvider>());
         services.AddSingleton<IFilesService, FilesService>();
         services.AddSingleton<IDialogService, DialogService>();
+        services.AddSingleton<IRecentFilesService>(_ => new RecentFilesService(RecentFilesService.DefaultFilePath));
         // services.AddSingleton<IMyService, MyService>();
         // services.AddTransient<IMyTransientService, MyTransientService>();
 
