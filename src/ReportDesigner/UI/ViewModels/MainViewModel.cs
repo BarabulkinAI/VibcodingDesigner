@@ -14,8 +14,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IDialogService _dialogService;
     private readonly IExportService _exportService;
     private readonly IRecentFilesService _recentFilesService;
-
-    [ObservableProperty] public partial string Greeting { get; set; } = "Welcome to Avalonia!";
+    
     [ObservableProperty] public partial string Title { get; set; } = "ReportDesigner";
     [ObservableProperty] public partial bool IsDocumentDirty { get; set; }
     [ObservableProperty] public partial IReadOnlyList<string> RecentFiles { get; set; } = Array.Empty<string>();

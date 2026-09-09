@@ -7,13 +7,6 @@
              x:Class="ReportDesigner.UI.Views.Controls.ObjectTreeView"
              x:DataType="vm:ObjectTreeViewModel">
 
-    <!--
-        Раздельные неявные шаблоны по типу узла (а не один общий TreeDataTemplate с
-        ItemsSource="{Binding Objects}", применяемый ко всем уровням дерева) — иначе Avalonia
-        пытается применить один и тот же скомпилированный биндинг "Objects" (выведенный под
-        ObjectTreeBandNode) и к листовым ObjectTreeObjectNode, у которых такого свойства нет, что
-        даёт InvalidCastException при клике/раскрытии дерева.
-    -->
     <UserControl.DataTemplates>
         <TreeDataTemplate DataType="vm:ObjectTreeBandNode" ItemsSource="{Binding Objects}">
             <TextBlock Text="{Binding DisplayName}"/>

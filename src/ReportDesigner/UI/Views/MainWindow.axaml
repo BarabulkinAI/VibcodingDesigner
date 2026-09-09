@@ -69,7 +69,7 @@
 
         <controls:DataSourcesView DockPanel.Dock="Bottom" Height="160" DataContext="{Binding DataSources}"/>
 
-        <Grid ColumnDefinitions="200,4,2*,4,260,4,3*">
+        <Grid ColumnDefinitions="250,4,2*,4,260,4,3*">
             <controls:ObjectTreeView Grid.Column="0" DataContext="{Binding ObjectTree}"/>
             <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"/>
 
