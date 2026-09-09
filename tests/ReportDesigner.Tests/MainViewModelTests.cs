@@ -130,6 +130,7 @@ public class MainViewModelTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json"); // File.Delete не бросает, если файла нет
         }
     }
 
@@ -153,6 +154,7 @@ public class MainViewModelTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json"); // File.Delete не бросает, если файла нет
         }
     }
 
@@ -192,6 +194,7 @@ public class MainViewModelTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json"); // File.Delete не бросает, если файла нет
         }
     }
 
@@ -232,6 +235,7 @@ public class MainViewModelTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json"); // File.Delete не бросает, если файла нет
         }
     }
 
@@ -269,6 +273,7 @@ public class MainViewModelTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json"); // File.Delete не бросает, если файла нет
         }
     }
 
@@ -289,6 +294,7 @@ public class MainViewModelTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json"); // File.Delete не бросает, если файла нет
         }
     }
 
@@ -336,6 +342,7 @@ public class MainViewModelTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json"); // File.Delete не бросает, если файла нет
         }
     }
 
@@ -354,6 +361,7 @@ public class MainViewModelTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json"); // File.Delete не бросает, если файла нет
         }
     }
 

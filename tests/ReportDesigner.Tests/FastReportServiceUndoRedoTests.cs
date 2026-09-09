@@ -183,6 +183,7 @@ public class FastReportServiceUndoRedoTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json");
         }
     }
 

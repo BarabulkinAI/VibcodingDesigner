@@ -1,5 +1,6 @@
 using System.Data;
 using System.Drawing;
+using System.Text.Json;
 using FastReport;
 using FastReport.Data;
 using FastReport.Utils;
@@ -86,10 +87,12 @@ public class FastReportService : IFastReportService
         CurrentReport = report;
         // .frx сохраняет источник данных как компонент (TableDataSource) без реальных строк —
         // при повторной загрузке DataBand.DataSource ссылается на "пустышку", и Prepare() падает
-        // с DataTableException ("Table is not connected to the data"). _dataSources уже пуст
-        // (Clear() выше), поэтому вызов ниже лишь отвязывает и вычищает этот мусор из Dictionary
-        // (тот же метод, что пересобирает источники после SetDataSource/RemoveDataSource).
-        RegisterDataSourcesIntoReport();
+        // с DataTableException ("Table is not connected to the data"). Реальные данные и
+        // привязки к полосам живут в отдельном sidecar-файле рядом с .frx (см. SaveDataSourcesSidecar) —
+        // восстанавливаем их сюда перед пересборкой источников в CurrentReport.
+        var sidecar = LoadDataSourcesSidecar(path);
+        RestoreDataSourcesFromSidecar(sidecar);
+        RegisterDataSourcesIntoReport(explicitBandAssignments: sidecar?.BandAssignments);
         MarkSaved(path);
         SeedUndoBaseline();
     }
@@ -101,7 +104,11 @@ public class FastReportService : IFastReportService
         var report = new Report();
         report.Load(path);
         CurrentReport = report;
-        RegisterDataSourcesIntoReport(); // см. комментарий в Load() выше
+        // См. комментарий в Load() выше — тот же sidecar с образцовыми данными восстанавливается
+        // и для шаблона, иначе [Источник.Колонка] в тексте шаблона сразу сломает Prepare().
+        var sidecar = LoadDataSourcesSidecar(path);
+        RestoreDataSourcesFromSidecar(sidecar);
+        RegisterDataSourcesIntoReport(explicitBandAssignments: sidecar?.BandAssignments);
         // В отличие от Load — не запоминаем путь: документ остаётся «Новым», как после CreateNew().
         _currentFilePath = null;
         _isDirty = false;
@@ -111,6 +118,7 @@ public class FastReportService : IFastReportService
     public void Save(string path)
     {
         CurrentReport.Save(path);
+        SaveDataSourcesSidecar(path);
         MarkSaved(path);
     }
 
@@ -648,25 +656,24 @@ public class FastReportService : IFastReportService
     /// <summary>
     /// Пересобирает все зарегистрированные в <see cref="CurrentReport"/> источники данных из
     /// <see cref="_dataSources"/> с нуля (проще и надёжнее точечных Unregister/Register —
-    /// источников всегда немного). Перед очисткой запоминает, какие DataBand на какой источник
-    /// были привязаны (по имени), и восстанавливает привязку после пересборки — иначе, например,
-    /// правка строк одного источника молча отвязала бы данные от всех полос. При переименовании
-    /// источника (<paramref name="renamedFrom"/> → <paramref name="renamedTo"/>) привязка,
-    /// сделанная под старым именем, переносится на новое.
+    /// источников всегда немного). По умолчанию перед очисткой запоминает, какие DataBand на
+    /// какой источник были привязаны (по имени, через <see cref="CaptureLiveBandAssignments"/>),
+    /// и восстанавливает привязку после пересборки — иначе, например, правка строк одного
+    /// источника молча отвязала бы данные от всех полос. При переименовании источника
+    /// (<paramref name="renamedFrom"/> → <paramref name="renamedTo"/>) привязка, сделанная под
+    /// старым именем, переносится на новое.
+    /// <paramref name="explicitBandAssignments"/> позволяет передать привязки явно (полоса →
+    /// источник) вместо чтения их с живых полос — нужно для Load/LoadAsTemplate, где сразу после
+    /// report.Load() живые полосы ещё ничего не знают про привязки из sidecar-файла.
     /// </summary>
-    private void RegisterDataSourcesIntoReport(string? renamedFrom = null, string? renamedTo = null)
+    private void RegisterDataSourcesIntoReport(
+        string? renamedFrom = null,
+        string? renamedTo = null,
+        IReadOnlyDictionary<string, string>? explicitBandAssignments = null)
     {
         var page = CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault();
-        var bandAssignments = new List<(DataBand Band, string SourceName)>();
-        if (page != null)
-        {
-            foreach (var band in EnumerateAllBands(page).OfType<DataBand>())
-            {
-                if (band.DataSource is not { } ds) continue;
-                var sourceName = ds.Name == renamedFrom ? renamedTo! : ds.Name;
-                bandAssignments.Add((band, sourceName));
-            }
-        }
+        var bandAssignments = explicitBandAssignments
+            ?? CaptureLiveBandAssignments(renamedFrom, renamedTo);
 
         // ClearRegisteredData() только отключает данные от TableDataSource, но не убирает сам
         // компонент из Dictionary — выражение [Источник.Колонка] в тексте объекта всё ещё
@@ -693,8 +700,13 @@ public class FastReportService : IFastReportService
             CurrentReport.GetDataSource(def.Name)!.Enabled = true;
         }
 
-        foreach (var (band, sourceName) in bandAssignments)
+        if (page == null) return;
+
+        foreach (var (bandName, sourceName) in bandAssignments)
         {
+            var band = EnumerateAllBands(page).OfType<DataBand>().FirstOrDefault(b => b.Name == bandName);
+            if (band == null) continue; // привязка на несуществующую/переименованную полосу — молча пропускаем
+
             // ClearRegisteredData() снимает связь TableDataSource с данными, но не убирает сам
             // компонент из Dictionary — GetDataSource(name) после очистки всё ещё находит
             // "отключённый" источник (это и есть DataTableException "Table is not connected to
@@ -705,6 +717,75 @@ public class FastReportService : IFastReportService
             band.DataSource = _dataSources.Any(d => d.Name == sourceName)
                 ? CurrentReport.GetDataSource(sourceName)
                 : null;
+        }
+    }
+
+    /// <summary>Читает текущие привязки DataBand.DataSource с живых полос страницы (полоса →
+    /// имя источника). При переименовании источника (<paramref name="renamedFrom"/> →
+    /// <paramref name="renamedTo"/>) привязка, сделанная под старым именем, переносится на новое.</summary>
+    private Dictionary<string, string> CaptureLiveBandAssignments(string? renamedFrom = null, string? renamedTo = null)
+    {
+        var result = new Dictionary<string, string>();
+        var page = CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault();
+        if (page == null) return result;
+
+        foreach (var band in EnumerateAllBands(page).OfType<DataBand>())
+        {
+            if (band.DataSource is not { } ds) continue;
+            result[band.Name] = ds.Name == renamedFrom ? renamedTo! : ds.Name;
+        }
+        return result;
+    }
+
+    private static string SidecarPath(string reportPath) => reportPath + ".datasources.json";
+
+    /// <summary>Сохраняет текущие _dataSources и привязки полос в JSON рядом с .frx (см.
+    /// «Известные риски» в docs/ARCHITECTURE.md — сами данные источников не переживают
+    /// сериализацию .frx). Без Directory.CreateDirectory: к этому моменту CurrentReport.Save(path)
+    /// уже отработал, значит папка точно существует.</summary>
+    private void SaveDataSourcesSidecar(string path)
+    {
+        var dto = new DataSourcesSidecarDto
+        {
+            Sources = _dataSources.Select(d => new DataSourceDto
+            {
+                Name = d.Name,
+                Columns = d.Columns.ToList(),
+                Rows = d.Rows.Select(r => r.ToList()).ToList(),
+            }).ToList(),
+            BandAssignments = CaptureLiveBandAssignments(),
+        };
+        File.WriteAllText(SidecarPath(path), JsonSerializer.Serialize(dto));
+    }
+
+    /// <summary>Читает sidecar-файл с источниками данных; отсутствие или повреждение файла —
+    /// не ошибка, а деградация к прежнему поведению (источники просто не восстанавливаются).</summary>
+    private static DataSourcesSidecarDto? LoadDataSourcesSidecar(string reportPath)
+    {
+        var sidecarPath = SidecarPath(reportPath);
+        if (!File.Exists(sidecarPath)) return null;
+        try
+        {
+            var json = File.ReadAllText(sidecarPath);
+            return JsonSerializer.Deserialize<DataSourcesSidecarDto>(json);
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    private void RestoreDataSourcesFromSidecar(DataSourcesSidecarDto? sidecar)
+    {
+        if (sidecar == null) return;
+        foreach (var s in sidecar.Sources)
+        {
+            _dataSources.Add(new DataSourceDefinition
+            {
+                Name = s.Name,
+                Columns = s.Columns.ToList(),
+                Rows = s.Rows.Select(r => r.ToList()).ToList(),
+            });
         }
     }
 

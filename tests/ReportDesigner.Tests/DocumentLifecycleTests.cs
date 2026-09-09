@@ -44,6 +44,7 @@ public class DocumentLifecycleTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json");
         }
     }
 
@@ -100,6 +101,7 @@ public class DocumentLifecycleTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json");
         }
     }
 }

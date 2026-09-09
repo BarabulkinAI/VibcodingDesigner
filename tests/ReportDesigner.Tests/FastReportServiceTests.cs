@@ -377,15 +377,17 @@ public class FastReportServiceTests
     }
 
     /// <summary>
-    /// Регрессия: источники данных не сохраняются в .frx (см. известные ограничения в
-    /// ARCHITECTURE.md), но сама привязка DataBand.DataSource и компонент TableDataSource
-    /// сериализуются как часть Report — после Load() DataBand ссылался на "отключённый от
-    /// данных" источник, и Report.Prepare() падал с DataTableException прямо из
-    /// DataBand.InitDataSource(), даже без единого [Field]-выражения. Воспроизведено вручную
-    /// пользователем при обычном открытии сохранённого файла (не придуманный edge case).
+    /// Регрессия: привязка DataBand.DataSource и компонент TableDataSource сериализуются как
+    /// часть Report независимо от sidecar-файла с данными источников (см.
+    /// SaveDataSourcesSidecar/LoadDataSourcesSidecar в FastReportService.cs) — если sidecar
+    /// недоступен (файл потерян/скопирован без него — см. известные ограничения в
+    /// ARCHITECTURE.md), DataBand после Load() ссылался бы на "отключённый от данных" источник,
+    /// и Report.Prepare() падал бы с DataTableException прямо из DataBand.InitDataSource(),
+    /// даже без единого [Field]-выражения. Воспроизведено вручную пользователем при обычном
+    /// открытии сохранённого файла (не придуманный edge case) до появления sidecar-персистентности.
     /// </summary>
     [Fact]
-    public void Load_DetachesStaleDataSourceFromBand_PrepareDoesNotThrow()
+    public void Load_MissingSidecar_DetachesStaleDataSourceFromBand_PrepareDoesNotThrow()
     {
         var service = new FastReportService();
         service.CreateNew();
@@ -394,13 +396,16 @@ public class FastReportServiceTests
         service.AssignBandDataSource(dataBand, "Источник");
 
         var path = Path.Combine(Path.GetTempPath(), $"stale_ds_{Guid.NewGuid():N}.frx");
+        var sidecarPath = path + ".datasources.json";
         try
         {
             service.Save(path);
+            File.Delete(sidecarPath); // симулируем .frx, скопированный/сохранённый без sidecar
 
             var loaded = new FastReportService();
             loaded.Load(path);
 
+            Assert.Empty(loaded.GetDataSourceNames());
             var band = loaded.GetSnapshot().Pages[0].Bands.Single(b => b.Name == dataBand);
             Assert.Null(band.DataSourceName); // источник корректно отвязан
 
@@ -410,6 +415,7 @@ public class FastReportServiceTests
         finally
         {
             File.Delete(path);
+            File.Delete(sidecarPath);
         }
     }
 
@@ -440,6 +446,139 @@ public class FastReportServiceTests
         finally
         {
             File.Delete(path);
+            File.Delete(path + ".datasources.json");
+        }
+    }
+
+    [Fact]
+    public void SaveAndLoad_RoundTripsDataSourceRowsAndBandAssignment()
+    {
+        var service = new FastReportService();
+        service.CreateNew();
+        service.SetDataSource("Клиенты", new[] { "Имя" }, new[]
+        {
+            new[] { "Иван" },
+            new[] { "Ольга" },
+        });
+        var dataBand = DataBandName(service);
+        service.AssignBandDataSource(dataBand, "Клиенты");
+        var textName = service.AddObject(DesignObjectType.Text, 0, 0, 4, 1, dataBand);
+        service.SetText(textName, "[Клиенты.Имя]");
+
+        var path = Path.Combine(Path.GetTempPath(), $"ds_roundtrip_{Guid.NewGuid():N}.frx");
+        try
+        {
+            service.Save(path);
+
+            var loaded = new FastReportService();
+            loaded.Load(path);
+
+            Assert.Equal(new[] { "Клиенты" }, loaded.GetDataSourceNames());
+            Assert.Equal(new[] { "Имя" }, loaded.GetDataSourceColumns("Клиенты"));
+
+            var band = loaded.GetSnapshot().Pages[0].Bands.Single(b => b.Name == dataBand);
+            Assert.Equal("Клиенты", band.DataSourceName);
+
+            // Названия колонок можно было бы получить и без sidecar (они есть в старом тесте
+            // FieldExpression_...) — здесь важно проверить, что дошли именно СТРОКИ, которые
+            // никакой другой геттер IFastReportService не возвращает.
+            loaded.CurrentReport.Prepare();
+            var texts = loaded.CurrentReport.PreparedPages.GetPage(0).AllObjects
+                .OfType<FastReport.TextObject>()
+                .Where(t => t.Name == textName)
+                .Select(t => t.Text)
+                .ToList();
+            Assert.Equal(new[] { "Иван", "Ольга" }, texts);
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete(path + ".datasources.json");
+        }
+    }
+
+    [Fact]
+    public void Load_CorruptSidecar_ReturnsEmptyInsteadOfThrowing()
+    {
+        var service = new FastReportService();
+        service.CreateNew();
+        service.SetDataSource("Клиенты", new[] { "Имя" }, new[] { new[] { "Иван" } });
+
+        var path = Path.Combine(Path.GetTempPath(), $"ds_corrupt_{Guid.NewGuid():N}.frx");
+        var sidecarPath = path + ".datasources.json";
+        try
+        {
+            service.Save(path);
+            File.WriteAllText(sidecarPath, "не json");
+
+            var loaded = new FastReportService();
+            var ex = Record.Exception(() => loaded.Load(path));
+
+            Assert.Null(ex);
+            Assert.Empty(loaded.GetDataSourceNames());
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete(sidecarPath);
+        }
+    }
+
+    [Fact]
+    public void RenameDataSource_ThenSaveAndLoad_PersistsUnderNewName()
+    {
+        var service = new FastReportService();
+        service.CreateNew();
+        service.SetDataSource("Клиенты", new[] { "Имя" }, new[] { new[] { "Иван" } });
+        var dataBand = DataBandName(service);
+        service.AssignBandDataSource(dataBand, "Клиенты");
+        service.RenameDataSource("Клиенты", "Заказчики");
+
+        var path = Path.Combine(Path.GetTempPath(), $"ds_rename_{Guid.NewGuid():N}.frx");
+        try
+        {
+            service.Save(path);
+
+            var loaded = new FastReportService();
+            loaded.Load(path);
+
+            Assert.Equal(new[] { "Заказчики" }, loaded.GetDataSourceNames());
+            var band = loaded.GetSnapshot().Pages[0].Bands.Single(b => b.Name == dataBand);
+            Assert.Equal("Заказчики", band.DataSourceName);
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete(path + ".datasources.json");
+        }
+    }
+
+    [Fact]
+    public void LoadAsTemplate_RestoresDataSourcesButNotFilePath()
+    {
+        var service = new FastReportService();
+        service.CreateNew();
+        service.SetDataSource("Клиенты", new[] { "Имя" }, new[] { new[] { "Иван" } });
+        var dataBand = DataBandName(service);
+        service.AssignBandDataSource(dataBand, "Клиенты");
+
+        var path = Path.Combine(Path.GetTempPath(), $"ds_template_{Guid.NewGuid():N}.frx");
+        try
+        {
+            service.Save(path);
+
+            var loaded = new FastReportService();
+            loaded.LoadAsTemplate(path);
+
+            Assert.Null(loaded.CurrentFilePath); // документ остаётся «Новым»
+            Assert.Equal(new[] { "Клиенты" }, loaded.GetDataSourceNames());
+            var band = loaded.GetSnapshot().Pages[0].Bands.Single(b => b.Name == dataBand);
+            Assert.Equal("Клиенты", band.DataSourceName);
+        }
+        finally
+        {
+            File.Delete(path);
+            File.Delete(path + ".datasources.json");
         }
     }
 }
