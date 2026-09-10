@@ -3,6 +3,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:vm="clr-namespace:ReportDesigner.UI.ViewModels"
+             xmlns:conv="clr-namespace:ReportDesigner.UI.Converters"
              mc:Ignorable="d" d:DesignWidth="260" d:DesignHeight="500"
              x:Class="ReportDesigner.UI.Views.Controls.PropertiesPanelView"
              x:DataType="vm:PropertiesPanelViewModel">
@@ -32,7 +33,10 @@
 
                 <StackPanel Spacing="4" IsVisible="{Binding IsTextObject}">
                     <TextBlock Text="Текст" FontWeight="SemiBold"/>
-                    <TextBox Text="{Binding Text}" AcceptsReturn="True" TextWrapping="Wrap" Height="60"/>
+                    <TextBox Text="{Binding Text}" AcceptsReturn="True" TextWrapping="Wrap" Height="60"
+                             FontFamily="{Binding FontName}" FontSize="{Binding FontSize}"
+                             FontWeight="{Binding FontBold, Converter={x:Static conv:BoolToFontWeightConverter.Instance}}"
+                             FontStyle="{Binding FontItalic, Converter={x:Static conv:BoolToFontStyleConverter.Instance}}"/>
 
                     <TextBlock Text="Шрифт"/>
                     <StackPanel Orientation="Horizontal" Spacing="4">
