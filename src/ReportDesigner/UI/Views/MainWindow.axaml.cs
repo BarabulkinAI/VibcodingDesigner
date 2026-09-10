@@ -80,8 +80,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private void OnRefresh(object? sender, RoutedEventArgs e) => _vm.RefreshPreview();
-
     private void OnExitClick(object? sender, RoutedEventArgs e) => Close();
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)

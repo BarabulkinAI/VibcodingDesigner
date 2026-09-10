@@ -55,7 +55,6 @@
                     CommandParameter="{x:Static models:DesignObjectType.Shape}"/>
             <Button Content="Картинка" Command="{Binding DesignSurface.SelectToolCommand}"
                     CommandParameter="{x:Static models:DesignObjectType.Picture}"/>
-            <Button Content="Обновить превью" Click="OnRefresh" Margin="20,0,0,0"/>
         </StackPanel>
 
         <Border DockPanel.Dock="Bottom" Padding="8,3" BorderThickness="0,1,0,0" BorderBrush="#D0D0D0" Background="#F0F0F0">
