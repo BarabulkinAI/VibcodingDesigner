@@ -149,6 +149,32 @@ public class DesignSurfaceViewModelTests
     }
 
     [Fact]
+    public void ActiveResizeHandle_ReflectsGestureLifecycle()
+    {
+        // DesignSurface читает это свойство на каждое движение мыши, чтобы показать
+        // направленный курсор (↔/↕/↖↘) всё время, пока идёт ресайз — не только при наведении.
+        var (_, vm, name) = CreateWithObject();
+
+        Assert.Null(vm.ActiveResizeHandle);
+
+        vm.BeginResize(name, ResizeHandle.BottomRight, new PointF(0f, 0f));
+        Assert.Equal(ResizeHandle.BottomRight, vm.ActiveResizeHandle);
+
+        vm.CommitResize();
+        Assert.Null(vm.ActiveResizeHandle);
+    }
+
+    [Fact]
+    public void ActiveResizeHandle_IsNull_DuringDrag()
+    {
+        var (_, vm, name) = CreateWithObject();
+
+        vm.BeginDrag(name, new PointF(0f, 0f));
+
+        Assert.Null(vm.ActiveResizeHandle);
+    }
+
+    [Fact]
     public void CommitResize_PersistsSize_EvenWhenCommitDragIsCalledFirst()
     {
         // DesignSurface.OnPointerReleased вызывает CommitDrag(), затем CommitResize() подряд,

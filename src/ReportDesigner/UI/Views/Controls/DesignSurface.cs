@@ -48,6 +48,18 @@ public class DesignSurface : Control
     private static readonly IPen HandleBorderPen = new Pen(Brushes.DodgerBlue, 1);
     private static readonly IBrush PictureBrush = new SolidColorBrush(AvColor.FromRgb(0xF0, 0xF0, 0xF0));
 
+    private static readonly Dictionary<ResizeHandle, StandardCursorType> ResizeCursorTypes = new()
+    {
+        [ResizeHandle.Top] = StandardCursorType.TopSide,
+        [ResizeHandle.Bottom] = StandardCursorType.BottomSide,
+        [ResizeHandle.Left] = StandardCursorType.LeftSide,
+        [ResizeHandle.Right] = StandardCursorType.RightSide,
+        [ResizeHandle.TopLeft] = StandardCursorType.TopLeftCorner,
+        [ResizeHandle.TopRight] = StandardCursorType.TopRightCorner,
+        [ResizeHandle.BottomLeft] = StandardCursorType.BottomLeftCorner,
+        [ResizeHandle.BottomRight] = StandardCursorType.BottomRightCorner,
+    };
+
     static DesignSurface()
     {
         FocusableProperty.OverrideDefaultValue<DesignSurface>(true);
@@ -327,12 +339,34 @@ public class DesignSurface : Control
         vm.UpdateDrag(point);
         vm.UpdateResize(point);
         vm.UpdateCursorPosition(point);
+        UpdateResizeCursor(vm, point);
+    }
+
+    /// <summary>Показывает направленный курсор (↔/↕/↖↘/↗↙) над ручкой ресайза выделенного
+    /// объекта — как во время наведения, так и на всём протяжении самого ресайза (когда
+    /// указатель уже мог уйти с ручки под захватом указателя). Не трогает курсор, пока активен
+    /// инструмент тулбокса — тот управляет им сам (см. <see cref="OnViewModelPropertyChanged"/>).</summary>
+    private void UpdateResizeCursor(DesignSurfaceViewModel vm, SPointF point)
+    {
+        if (vm.PendingToolType is not null) return;
+
+        var handle = vm.ActiveResizeHandle;
+        if (handle is null && vm.FindSelectedObject() is { } selected)
+        {
+            var pageBounds = ToPageBounds(selected.Band, selected.Object.Bounds);
+            var allowedHandles = ResizeGeometry.AllowedHandles(selected.Object.Type);
+            handle = ResizeGeometry.HitTest(pageBounds, HandleSizePx, point, allowedHandles);
+        }
+
+        Cursor = handle is { } h ? new Cursor(ResizeCursorTypes[h]) : Cursor.Default;
     }
 
     protected override void OnPointerExited(PointerEventArgs e)
     {
         base.OnPointerExited(e);
         ViewModel?.UpdateCursorPosition(null);
+        if (ViewModel?.ActiveResizeHandle is null)
+            Cursor = ViewModel?.PendingToolType is not null ? new Cursor(StandardCursorType.Cross) : Cursor.Default;
     }
 
     protected override void OnPointerReleased(PointerReleasedEventArgs e)

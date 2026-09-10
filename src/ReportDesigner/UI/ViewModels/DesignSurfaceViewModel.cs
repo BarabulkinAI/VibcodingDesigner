@@ -93,6 +93,9 @@ public partial class DesignSurfaceViewModel : ViewModelBase
     public (BandSnapshot Band, DesignObjectInfo Object)? FindSelectedObject() =>
         SelectedObjectName is { } name ? FindBandAndObject(name) : null;
 
+    /// <summary>Ручка ресайза активного жеста (для курсора канваса) — null вне жеста ресайза.</summary>
+    public ResizeHandle? ActiveResizeHandle => _gestureKind == GestureKind.Resize ? _gestureResizeHandle : null;
+
     // ------------------------------------------------------------------
     // Toolbox
     // ------------------------------------------------------------------
