@@ -282,7 +282,8 @@ public class DesignSurfaceViewModelTests
         var (service, vm) = CreateEmpty();
         vm.SelectToolCommand.Execute(DesignObjectType.Text);
 
-        var dataBand = service.GetSnapshot().Pages[0].Bands.Single(b => b.Kind == BandKind.Data);
+        var page = service.GetSnapshot().Pages[0];
+        var dataBand = page.Bands.Single(b => b.Kind == BandKind.Data);
         var clickPoint = new PointF(200f, dataBand.Top + 10f);
 
         vm.PlaceObjectAt(clickPoint);
@@ -294,7 +295,9 @@ public class DesignSurfaceViewModelTests
             .Single(b => b.Kind == BandKind.Data).Objects.Single();
         Assert.Equal(DesignObjectType.Text, created.Type);
         Assert.Equal(vm.SelectedObjectName, created.Name);
-        Assert.Equal(200f, created.Bounds.X, 1);
+        // band-относительный X — это X клика МИНУС левое поле страницы (см. PageSnapshot.MarginLeft):
+        // объект должен появиться ровно там, где кликнули, а не правее на величину поля.
+        Assert.Equal(200f - page.MarginLeft, created.Bounds.X, 1);
         Assert.Equal(10f, created.Bounds.Y, 1);
     }
 

@@ -7,11 +7,13 @@ namespace ReportDesigner.Tests;
 
 public class SnapshotHitTesterTests
 {
-    private static DesignSnapshot BuildSnapshot(params BandSnapshot[] bands) => new()
+    private static DesignSnapshot BuildSnapshot(params BandSnapshot[] bands) => BuildSnapshot(marginLeft: 0f, bands);
+
+    private static DesignSnapshot BuildSnapshot(float marginLeft, params BandSnapshot[] bands) => new()
     {
         Pages = new[]
         {
-            new PageSnapshot { Name = "Page1", Width = 800f, Height = 1000f, Bands = bands }
+            new PageSnapshot { Name = "Page1", Width = 800f, Height = 1000f, MarginLeft = marginLeft, Bands = bands }
         }
     };
 
@@ -35,6 +37,24 @@ public class SnapshotHitTesterTests
 
         Assert.NotNull(hit);
         Assert.Equal("Data", hit.Value.BandName);
+        Assert.Equal("Shape1", hit.Value.Object.Name);
+    }
+
+    [Fact]
+    public void FindObjectAt_SubtractsPageMarginLeftFromClickX()
+    {
+        // Регрессия: объект хранит X относительно левого края полосы, а реальный движок FastReport
+        // рисует полосы со сдвигом на MarginLeft от края бумаги — клик в координатах страницы
+        // должен сначала вычесть этот сдвиг, иначе объект с Left=0 не находился бы кликом по
+        // видимому на превью месту.
+        var obj = MakeObject("Shape1", new RectangleF(0f, 0f, 30f, 20f));
+        var band = new BandSnapshot { Name = "Data", Kind = BandKind.Data, Top = 50f, Height = 40f, Objects = new[] { obj } };
+        var snapshot = BuildSnapshot(marginLeft: 40f, band);
+
+        // Объект на странице фактически занимает (40,50)-(70,70) — клик по (50,60) должен попасть.
+        var hit = SnapshotHitTester.FindObjectAt(snapshot, new PointF(50f, 60f));
+
+        Assert.NotNull(hit);
         Assert.Equal("Shape1", hit.Value.Object.Name);
     }
 

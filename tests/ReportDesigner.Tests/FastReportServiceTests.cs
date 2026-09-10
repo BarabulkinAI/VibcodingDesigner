@@ -45,6 +45,26 @@ public class FastReportServiceTests
     }
 
     [Fact]
+    public void CreateNew_PageHasDefaultMarginsReflectedInSnapshot()
+    {
+        // Регрессия: FastReport по умолчанию задаёт ReportPage все 4 поля по 10мм (подтверждено
+        // эмпирически — в XML-документации значение по умолчанию не указано), а реальный движок
+        // (Report.Prepare()/экспорт/превью) рисует полосы со сдвигом именно на эти поля от края
+        // бумаги. Раньше канвас не знал о полях вообще и рисовал полосы от (0,0) бумаги — объект
+        // с Left=0/Top=0 на канвасе оказывался в левом верхнем углу листа, а в превью — на 10мм
+        // правее и ниже (см. PageSnapshot.MarginLeft, DesignSnapshotBuilder.BuildPage).
+        var service = new FastReportService();
+        service.CreateNew();
+
+        var page = service.GetSnapshot().Pages[0];
+        var marginPx = UnitConverter.MmToPx(10f);
+
+        Assert.Equal(marginPx, page.MarginLeft, 1);
+        // Верхнее поле не выделено отдельным свойством — оно уже "запечено" в Top первой полосы.
+        Assert.Equal(marginPx, page.Bands[0].Top, 1);
+    }
+
+    [Fact]
     public void GetPageSize_DefaultsToA4Portrait_AfterCreateNew()
     {
         var service = new FastReportService();

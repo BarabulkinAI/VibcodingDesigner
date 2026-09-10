@@ -133,11 +133,11 @@ public class DesignSurface : Control
                 foreach (var obj in band.Objects)
                 {
                     if (!obj.Visible) continue;
-                    DrawObject(context, obj, GetRenderBounds(vm, band, obj));
+                    DrawObject(context, obj, GetRenderBounds(vm, page, band, obj));
                 }
             }
 
-            DrawSelection(context, vm);
+            DrawSelection(context, vm, page);
         }
     }
 
@@ -260,12 +260,12 @@ public class DesignSurface : Control
         context.DrawText(formatted, origin);
     }
 
-    private static void DrawSelection(DrawingContext context, DesignSurfaceViewModel vm)
+    private static void DrawSelection(DrawingContext context, DesignSurfaceViewModel vm, PageSnapshot page)
     {
         if (vm.FindSelectedObject() is not { } selected) return;
 
         var bandRelative = vm.PreviewBoundsOverridePx ?? selected.Object.Bounds;
-        var pageBounds = ToPageBounds(selected.Band, bandRelative);
+        var pageBounds = ToPageBounds(page, selected.Band, bandRelative);
         var rect = ToAvRect(pageBounds);
 
         context.DrawRectangle(null, SelectionPen, rect);
@@ -306,9 +306,9 @@ public class DesignSurface : Control
             return;
         }
 
-        if (vm.FindSelectedObject() is { } selected)
+        if (vm.FindSelectedObject() is { } selected && vm.Snapshot.Pages.Count > 0)
         {
-            var pageBounds = ToPageBounds(selected.Band, selected.Object.Bounds);
+            var pageBounds = ToPageBounds(vm.Snapshot.Pages[0], selected.Band, selected.Object.Bounds);
             var allowedHandles = ResizeGeometry.AllowedHandles(selected.Object.Type);
             if (ResizeGeometry.HitTest(pageBounds, HandleSizePx, point, allowedHandles) is { } handle)
             {
@@ -354,9 +354,9 @@ public class DesignSurface : Control
         if (vm.PendingToolType is not null) return;
 
         var handle = vm.ActiveResizeHandle;
-        if (handle is null && vm.FindSelectedObject() is { } selected)
+        if (handle is null && vm.FindSelectedObject() is { } selected && vm.Snapshot.Pages.Count > 0)
         {
-            var pageBounds = ToPageBounds(selected.Band, selected.Object.Bounds);
+            var pageBounds = ToPageBounds(vm.Snapshot.Pages[0], selected.Band, selected.Object.Bounds);
             var allowedHandles = ResizeGeometry.AllowedHandles(selected.Object.Type);
             handle = ResizeGeometry.HitTest(pageBounds, HandleSizePx, point, allowedHandles);
         }
@@ -466,15 +466,18 @@ public class DesignSurface : Control
     private static SPointF ToPagePoint(AvPoint controlPoint, double zoom) =>
         new((float)(controlPoint.X / zoom), (float)(controlPoint.Y / zoom));
 
-    private static SRectF ToPageBounds(BandSnapshot band, SRectF bandRelativeBounds) =>
-        new(bandRelativeBounds.X, band.Top + bandRelativeBounds.Y, bandRelativeBounds.Width, bandRelativeBounds.Height);
+    /// <summary>Реальный движок FastReport рисует полосы со сдвигом на левое поле страницы (см.
+    /// <see cref="PageSnapshot.MarginLeft"/>) — канвас должен повторять тот же сдвиг, иначе
+    /// объект с band-относительным X=0 визуально не совпадёт с превью/экспортом.</summary>
+    private static SRectF ToPageBounds(PageSnapshot page, BandSnapshot band, SRectF bandRelativeBounds) =>
+        new(page.MarginLeft + bandRelativeBounds.X, band.Top + bandRelativeBounds.Y, bandRelativeBounds.Width, bandRelativeBounds.Height);
 
-    private static SRectF GetRenderBounds(DesignSurfaceViewModel vm, BandSnapshot band, DesignObjectInfo obj)
+    private static SRectF GetRenderBounds(DesignSurfaceViewModel vm, PageSnapshot page, BandSnapshot band, DesignObjectInfo obj)
     {
         var bandRelative = obj.Name == vm.SelectedObjectName && vm.PreviewBoundsOverridePx is { } overrideBounds
             ? overrideBounds
             : obj.Bounds;
-        return ToPageBounds(band, bandRelative);
+        return ToPageBounds(page, band, bandRelative);
     }
 
     private static AvRect ToAvRect(SRectF r) => new(r.X, r.Y, r.Width, r.Height);

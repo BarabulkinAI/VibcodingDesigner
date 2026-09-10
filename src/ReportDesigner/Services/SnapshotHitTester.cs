@@ -22,7 +22,11 @@ public static class SnapshotHitTester
     {
         if (FindBandAt(snapshot, pagePointPx) is not { } band) return null;
 
-        var bandRelativePoint = new PointF(pagePointPx.X, pagePointPx.Y - band.Top);
+        // MarginLeft — сдвиг полос от края бумаги, который реальный движок FastReport применяет
+        // при рендере (см. PageSnapshot.MarginLeft); объект хранит X относительно левого края
+        // полосы, поэтому его нужно вычесть при переводе клика в band-относительные координаты.
+        var marginLeftPx = snapshot.Pages[0].MarginLeft;
+        var bandRelativePoint = new PointF(pagePointPx.X - marginLeftPx, pagePointPx.Y - band.Top);
         for (var i = band.Objects.Count - 1; i >= 0; i--)
         {
             var obj = band.Objects[i];

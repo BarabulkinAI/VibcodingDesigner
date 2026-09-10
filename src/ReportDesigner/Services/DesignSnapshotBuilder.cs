@@ -24,8 +24,19 @@ public static class DesignSnapshotBuilder
 
     private static PageSnapshot BuildPage(ReportPage page)
     {
+        // Реальный движок FastReport (Report.Prepare()/экспорт/превью) рисует полосы страницы со
+        // сдвигом на LeftMargin/TopMargin от края бумаги — они НЕ являются частью самих полос,
+        // это чистый оффсет страницы. Топ первой полосы начинаем с TopMargin (а не с 0), тогда
+        // весь остальной код, читающий BandSnapshot.Top, автоматически получает уже готовую
+        // page-space координату (см. DesignSurface.ToPageBounds/SnapshotHitTester — они и так
+        // всегда используют band.Top как есть). Для X аналогичного "накопителя" нет — левое поле
+        // прокидывается отдельным полем PageSnapshot.MarginLeft, его прибавляют/вычитают там, где
+        // band-относительный X переводится в/из координат страницы (см. PageSnapshot.MarginLeft).
+        var marginLeftPx = UnitConverter.MmToPx(page.LeftMargin);
+        var marginTopPx = UnitConverter.MmToPx(page.TopMargin);
+
         var bands = new List<BandSnapshot>();
-        var topPx = 0f;
+        var topPx = marginTopPx;
         foreach (BandBase band in EnumerateBands(page))
         {
             var heightPx = ToPx(band.Height);
@@ -46,6 +57,7 @@ public static class DesignSnapshotBuilder
             Name = page.Name,
             Width = UnitConverter.MmToPx(page.PaperWidth),
             Height = UnitConverter.MmToPx(page.PaperHeight),
+            MarginLeft = marginLeftPx,
             Bands = bands,
         };
     }

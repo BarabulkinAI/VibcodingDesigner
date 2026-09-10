@@ -116,9 +116,13 @@ public partial class DesignSurfaceViewModel : ViewModelBase
 
         if (SnapshotHitTester.FindBandAt(Snapshot, pagePointPx) is not { } band) return;
 
+        // MarginLeft — сдвиг полос от края бумаги в реальном движке FastReport (см.
+        // PageSnapshot.MarginLeft); объект хранит X относительно левого края полосы, поэтому его
+        // нужно вычесть, иначе объект окажется правее того места, где реально кликнули.
+        var marginLeftPx = Snapshot.Pages[0].MarginLeft;
         var (widthPx, heightPx) = DefaultSizePx(type);
         var bounds = ResizeGeometry.ClampVertical(
-            new RectangleF(pagePointPx.X, pagePointPx.Y - band.Top, widthPx, heightPx), band.Height);
+            new RectangleF(pagePointPx.X - marginLeftPx, pagePointPx.Y - band.Top, widthPx, heightPx), band.Height);
 
         var name = _service.AddObject(type,
             UnitConverter.PxToCm(bounds.X), UnitConverter.PxToCm(bounds.Y),
