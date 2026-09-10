@@ -41,7 +41,7 @@
                           IsEnabled="{Binding DesignSurface.CanRedo}" InputGesture="Ctrl+Y"/>
             </MenuItem>
             <MenuItem Header="Вид">
-                <MenuItem Header="Панель превью" ToggleType="CheckBox" IsChecked="{Binding IsPreviewVisible}"/>
+                <MenuItem Header="Панель превью" ToggleType="CheckBox" IsChecked="{Binding IsPreviewVisible, Mode=TwoWay}"/>
             </MenuItem>
         </Menu>
 
