@@ -83,7 +83,10 @@ public class DesignSurface : Control
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(DesignSurfaceViewModel.Zoom))
+        if (e.PropertyName is nameof(DesignSurfaceViewModel.Zoom) or nameof(DesignSurfaceViewModel.Snapshot))
+            // Snapshot меняется, в частности, при смене размера страницы («Файл → Параметры
+            // страницы») — без перемера канвас в ScrollViewer не подхватит новый page.Width/Height
+            // сразу (MeasureOverride ниже читает их из Snapshot).
             InvalidateMeasure();
         if (e.PropertyName == nameof(DesignSurfaceViewModel.PendingToolType))
             Cursor = ViewModel?.PendingToolType is not null ? new Cursor(StandardCursorType.Cross) : Cursor.Default;

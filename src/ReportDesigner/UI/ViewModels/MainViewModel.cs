@@ -185,6 +185,17 @@ public partial class MainViewModel : ViewModelBase
     }
 
     [RelayCommand]
+    private async Task PageSetupAsync()
+    {
+        var (currentPreset, currentLandscape) = _fastReportService.GetPageSize();
+        var result = await _dialogService.ChoosePageSizeAsync(currentPreset, currentLandscape);
+        if (result is not { } chosen) return;
+
+        _fastReportService.SetPageSize(chosen.Preset, chosen.Landscape);
+        DesignSurface.CommitChange(); // обновит канвас/линейки/превью и запишет точку в undo
+    }
+
+    [RelayCommand]
     private Task SaveAsync() => SaveInternalAsync();
 
     [RelayCommand]

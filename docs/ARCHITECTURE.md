@@ -141,15 +141,37 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
     `PropertyChanged` того же способа, что уже применён для `RecentFiles` —
     `x:Name` на `ColumnDefinition` не генерирует поле в code-behind, пришлось
     именовать сам `Grid` и индексировать `ColumnDefinitions[5]`/`[6]`).
+  - **Баг, найденный пользователем сразу после пункта выше**: чекбокс переключался
+    визуально, но панель не пряталась. Причина — `MenuItem.IsChecked="{Binding ...}"`
+    без явного `Mode` биндится **OneWay** (в отличие от `CheckBox.IsChecked`, у
+    `MenuItem` это не двунаправленное свойство по умолчанию) — клик менял галочку
+    локально в контроле, но VM-свойство не менялось. Фикс — явный `Mode=TwoWay`.
+    **Урок**: в этом проекте на `IsChecked`/подобных свойствах элементов, которые не
+    являются `CheckBox`/`ToggleButton` напрямую, всегда указывать `Mode=TwoWay` явно.
+  - *Настраиваемые размеры страницы* (из бэклога, отдельная сессия) — по явной
+    просьбе пользователя ограничено двумя пресетами, **A4 и A3** (без произвольного
+    ввода мм), плюс переключатель ориентации (книжная/альбомная). Меню «Файл →
+    Параметры страницы...» → `PageSetupDialog` (обычный code-behind `Window`, как
+    `ConfirmDiscardChangesDialog`) → `IDialogService.ChoosePageSizeAsync` →
+    `MainViewModel.PageSetupCommand` → `IFastReportService.SetPageSize(PageSizePreset,
+    bool landscape)` + `DesignSurface.CommitChange()` (undo-точка + обновление
+    канваса/превью, как и у всех остальных мутаций). `GetPageSize()` — обратное
+    сопоставление текущих `PaperWidth/PaperHeight/Landscape` пресету, для
+    предзаполнения диалога; если размер не совпадает ни с одним пресетом (сторонний
+    `.frx`) — по умолчанию A4 с реальной текущей ориентацией. Работает и для «Нового»,
+    и для уже открытого документа (не привязано к моменту `CreateNew()`).
+    Побочный фикс: `DesignSurface.OnViewModelPropertyChanged` теперь перемеряет канвас
+    (`InvalidateMeasure()`) и при смене `Snapshot`, не только `Zoom` — раньше размер
+    страницы никогда не менялся после создания документа, поэтому этот пробел не
+    проявлялся. Осознанное ограничение: объекты, уже размещённые на странице, не
+    переносятся/не клэмпятся при уменьшении размера — как и `ClampVertical` при
+    ресайзе полос, это не сделано для координаты по ширине.
 
 ## Бэклог (кандидаты на будущие этапы)
 
 Не запланированы по фазам, зафиксированы по просьбе пользователя после ручной
 проверки персистентности источников данных:
 
-- **Настраиваемые стандартные размеры страницы** — `FastReportService.CreateNew()`
-  жёстко задаёт A4 (`PaperHeight = 297`, `PaperWidth = 210`, мм — строки 65-66),
-  других пресетов или ручного ввода размера нет.
 - **Несколько страниц в отчёте** — везде по коду (`FastReportService`,
   `DesignSnapshotBuilder`, ViewModels) используется единственная страница через
   `CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault()`; `CreateNew()` делает
@@ -186,6 +208,12 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
 
 Прочие подтверждённые факты API 2026.x:
 - `PaperWidth/PaperHeight` — в **миллиметрах**;
+- `ReportPage.Landscape` свопает `PaperWidth`/`PaperHeight` (и поля) сама, но только когда
+  значению реально присваивают ДРУГОЕ значение (подтверждено доками FastReport.xml: "When you
+  change this property, it will automatically swap paper width and height"). Чтобы выставить
+  произвольный пресет+ориентацию детерминированно независимо от текущего состояния —
+  `Landscape = false` → абсолютные книжные `PaperWidth/PaperHeight` → `Landscape = target`
+  (см. `FastReportService.SetPageSize`);
 - `LineObject`: нет `StartPoint/EndPoint/LineWidth/LineColor`; линия настраивается через `Border.Width/Style/Color`, направление — `Diagonal`;
 - PDF-экспорта в OpenSource нет (есть отдельный плагин `FastReport.OpenSource.Export.PdfSimple`);
 - цвет текста — `TextObject.TextColor`, выравнивание — `HorzAlign`/`VertAlign`, скруглённый прямоугольник — `ShapeKind.RoundRectangle`.

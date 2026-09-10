@@ -27,6 +27,7 @@
                 <MenuItem Header="Недавние файлы" Name="RecentFilesMenuItem"/>
                 <MenuItem Header="Сохранить" Command="{Binding SaveCommand}" InputGesture="Ctrl+S"/>
                 <MenuItem Header="Сохранить как..." Command="{Binding SaveAsCommand}" InputGesture="Ctrl+Shift+S"/>
+                <MenuItem Header="Параметры страницы..." Command="{Binding PageSetupCommand}"/>
                 <MenuItem Header="Экспорт">
                     <MenuItem Header="PNG..." Command="{Binding ExportPngCommand}"/>
                     <MenuItem Header="HTML..." Command="{Binding ExportHtmlCommand}"/>

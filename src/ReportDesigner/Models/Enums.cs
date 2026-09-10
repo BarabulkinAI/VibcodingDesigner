@@ -47,3 +47,10 @@ public enum DesignShapeKind
     Triangle,
     RoundedRectangle
 }
+
+/// <summary>Пресет размера бумаги (книжная ориентация, мм) — см. «Файл → Параметры страницы».</summary>
+public enum PageSizePreset
+{
+    A4,
+    A3
+}

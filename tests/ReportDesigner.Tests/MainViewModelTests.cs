@@ -50,11 +50,19 @@ public class MainViewModelTests
     {
         public DiscardChangesResult NextResult { get; set; } = DiscardChangesResult.Discard;
         public int CallCount { get; private set; }
+        public (PageSizePreset Preset, bool Landscape)? NextPageSize { get; set; }
+        public int PageSizeCallCount { get; private set; }
 
         public Task<DiscardChangesResult> ConfirmDiscardChangesAsync(string documentDisplayName)
         {
             CallCount++;
             return Task.FromResult(NextResult);
+        }
+
+        public Task<(PageSizePreset Preset, bool Landscape)?> ChoosePageSizeAsync(PageSizePreset currentPreset, bool currentLandscape)
+        {
+            PageSizeCallCount++;
+            return Task.FromResult(NextPageSize);
         }
     }
 
@@ -372,5 +380,32 @@ public class MainViewModelTests
         files.NextExportPngPath = null;
 
         await main.ExportPngCommand.ExecuteAsync(null); // не должно бросать/падать
+    }
+
+    [Fact]
+    public async Task PageSetupAsync_AppliesChosenPreset()
+    {
+        var (service, _, dialog, _, main) = Create();
+        dialog.NextPageSize = (PageSizePreset.A3, true);
+
+        await main.PageSetupCommand.ExecuteAsync(null);
+
+        var (preset, landscape) = service.GetPageSize();
+        Assert.Equal(PageSizePreset.A3, preset);
+        Assert.True(landscape);
+    }
+
+    [Fact]
+    public async Task PageSetupAsync_CancelledDialog_KeepsCurrentPageSize()
+    {
+        var (service, _, dialog, _, main) = Create();
+        dialog.NextPageSize = null;
+
+        await main.PageSetupCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, dialog.PageSizeCallCount);
+        var (preset, landscape) = service.GetPageSize();
+        Assert.Equal(PageSizePreset.A4, preset);
+        Assert.False(landscape);
     }
 }

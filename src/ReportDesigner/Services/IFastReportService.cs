@@ -30,6 +30,16 @@ public interface IFastReportService
     /// <summary>Лёгкий снимок отчёта для отрисовки канваса и дерева объектов.</summary>
     DesignSnapshot GetSnapshot();
 
+    // --- Страница ---
+    /// <summary>Задаёт размер бумаги по пресету (A4/A3) и ориентацию. Не сбрасывает объекты —
+    /// уже размещённые могут визуально выйти за пределы нового размера, если он меньше прежнего
+    /// (осознанное ограничение, как и у ClampVertical при ресайзе полос).</summary>
+    void SetPageSize(PageSizePreset preset, bool landscape);
+    /// <summary>Текущий размер страницы как пресет — для предзаполнения диалога «Параметры
+    /// страницы». Если размер не совпадает ни с одним пресетом (нестандартный сторонний файл),
+    /// возвращает A4 с реальной ориентацией.</summary>
+    (PageSizePreset Preset, bool Landscape) GetPageSize();
+
     // --- Полосы ---
     string AddBand(BandKind kind, float heightCm = 2f, string? bandName = null);
     void RemoveBand(string bandName);

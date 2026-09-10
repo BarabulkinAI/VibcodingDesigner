@@ -45,6 +45,53 @@ public class FastReportServiceTests
     }
 
     [Fact]
+    public void GetPageSize_DefaultsToA4Portrait_AfterCreateNew()
+    {
+        var service = new FastReportService();
+        service.CreateNew();
+
+        var (preset, landscape) = service.GetPageSize();
+
+        Assert.Equal(PageSizePreset.A4, preset);
+        Assert.False(landscape);
+    }
+
+    [Fact]
+    public void SetPageSize_A3Landscape_UpdatesSnapshotDimensionsAndIsReflectedByGetPageSize()
+    {
+        var service = new FastReportService();
+        service.CreateNew();
+
+        service.SetPageSize(PageSizePreset.A3, landscape: true);
+
+        var page = service.GetSnapshot().Pages[0];
+        Assert.Equal(UnitConverter.MmToPx(420), page.Width, 1);
+        Assert.Equal(UnitConverter.MmToPx(297), page.Height, 1);
+
+        var (preset, landscape) = service.GetPageSize();
+        Assert.Equal(PageSizePreset.A3, preset);
+        Assert.True(landscape);
+    }
+
+    [Fact]
+    public void SetPageSize_TogglingOrientationTwice_ReturnsToOriginalDimensions()
+    {
+        // Регрессия: ReportPage.Landscape свопает PaperWidth/PaperHeight только когда значение
+        // реально МЕНЯЕТСЯ (см. FastReport.xml) — SetPageSize должен приводить страницу к
+        // книжной ориентации перед выставлением абсолютных размеров пресета, иначе повторные
+        // переключения ориентации туда-обратно могли бы разъехаться.
+        var service = new FastReportService();
+        service.CreateNew();
+
+        service.SetPageSize(PageSizePreset.A4, landscape: true);
+        service.SetPageSize(PageSizePreset.A4, landscape: false);
+
+        var page = service.GetSnapshot().Pages[0];
+        Assert.Equal(UnitConverter.MmToPx(210), page.Width, 1);
+        Assert.Equal(UnitConverter.MmToPx(297), page.Height, 1);
+    }
+
+    [Fact]
     public void AddObject_CreatesTextWithExpectedBounds()
     {
         var service = new FastReportService();

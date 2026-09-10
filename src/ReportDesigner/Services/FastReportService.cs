@@ -132,6 +132,58 @@ public class FastReportService : IFastReportService
     public DesignSnapshot GetSnapshot() => DesignSnapshotBuilder.Build(CurrentReport);
 
     // ------------------------------------------------------------------
+    // Страница
+    // ------------------------------------------------------------------
+
+    /// <summary>Ширина/высота книжной (portrait) ориентации пресета, мм.</summary>
+    private static (float WidthMm, float HeightMm) PresetPortraitSizeMm(PageSizePreset preset) => preset switch
+    {
+        PageSizePreset.A4 => (210f, 297f),
+        PageSizePreset.A3 => (297f, 420f),
+        _ => throw new ArgumentOutOfRangeException(nameof(preset)),
+    };
+
+    public void SetPageSize(PageSizePreset preset, bool landscape)
+    {
+        var page = GetFirstPage();
+        var (widthMm, heightMm) = PresetPortraitSizeMm(preset);
+
+        // ReportPage.Landscape свопает PaperWidth/PaperHeight (и поля) сама, но только когда
+        // значение реально МЕНЯЕТСЯ (подтверждено доками FastReport.xml) — поэтому сначала
+        // принудительно приводим страницу к книжной ориентации (не трогая размеры, если она уже
+        // была книжной), затем выставляем абсолютные книжные размеры пресета, и только потом
+        // включаем альбомную, если нужна: так результат детерминирован независимо от того, в
+        // каком размере/ориентации страница была до вызова.
+        page.Landscape = false;
+        page.PaperWidth = widthMm;
+        page.PaperHeight = heightMm;
+        page.Landscape = landscape;
+
+        _isDirty = true;
+    }
+
+    public (PageSizePreset Preset, bool Landscape) GetPageSize()
+    {
+        var page = GetFirstPage();
+        var landscape = page.Landscape;
+        var (currentWidthMm, currentHeightMm) = landscape
+            ? (page.PaperHeight, page.PaperWidth) // приводим к книжной ориентации для сравнения с пресетами
+            : (page.PaperWidth, page.PaperHeight);
+
+        foreach (var preset in Enum.GetValues<PageSizePreset>())
+        {
+            var (widthMm, heightMm) = PresetPortraitSizeMm(preset);
+            if (Math.Abs(currentWidthMm - widthMm) < 0.5f && Math.Abs(currentHeightMm - heightMm) < 0.5f)
+                return (preset, landscape);
+        }
+
+        // Открытый файл с нестандартным размером страницы (не A4/A3, например сторонний .frx) —
+        // диалогу «Параметры страницы» нужно с чего-то начать; A4 — тот же дефолт, что и в
+        // CreateNew(). Ориентацию всё равно берём настоящую, а не тоже подменяем на дефолт.
+        return (PageSizePreset.A4, landscape);
+    }
+
+    // ------------------------------------------------------------------
     // Полосы
     // ------------------------------------------------------------------
 
