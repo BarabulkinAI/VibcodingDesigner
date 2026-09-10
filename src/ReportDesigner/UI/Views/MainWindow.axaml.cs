@@ -34,6 +34,23 @@ public partial class MainWindow : Window
     {
         if (e.PropertyName == nameof(MainViewModel.RecentFiles))
             RefreshRecentFilesMenu();
+        if (e.PropertyName == nameof(MainViewModel.IsPreviewVisible))
+            UpdatePreviewColumnWidths();
+    }
+
+    /// <summary>
+    /// Схлопывает столбцы панели превью (сплиттер + сама панель) до 0, когда она скрыта — в
+    /// отличие от простого IsVisible на содержимом, это не оставляет пустой промежуток на месте
+    /// звёздочного столбца. Именованные ColumnDefinition вместо биндинга Width — по тому же
+    /// принципу, что и RecentFilesMenuItem выше: явный код надёжнее для того, что плохо ложится
+    /// на компилируемые биндинги.
+    /// </summary>
+    private void UpdatePreviewColumnWidths()
+    {
+        var visible = _vm.IsPreviewVisible;
+        var columns = MainContentGrid.ColumnDefinitions;
+        columns[5].Width = visible ? new GridLength(4) : new GridLength(0);
+        columns[6].Width = visible ? new GridLength(3, GridUnitType.Star) : new GridLength(0);
     }
 
     /// <summary>

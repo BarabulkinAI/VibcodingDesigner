@@ -40,6 +40,9 @@
                 <MenuItem Header="Повторить" Command="{Binding DesignSurface.RedoCommand}"
                           IsEnabled="{Binding DesignSurface.CanRedo}" InputGesture="Ctrl+Y"/>
             </MenuItem>
+            <MenuItem Header="Вид">
+                <MenuItem Header="Панель превью" ToggleType="CheckBox" IsChecked="{Binding IsPreviewVisible}"/>
+            </MenuItem>
         </Menu>
 
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="5" Spacing="6">
@@ -69,7 +72,7 @@
 
         <controls:DataSourcesView DockPanel.Dock="Bottom" Height="160" DataContext="{Binding DataSources}"/>
 
-        <Grid ColumnDefinitions="400,4,2*,4,260,4,3*">
+        <Grid Name="MainContentGrid" ColumnDefinitions="400,4,2*,4,260,4,3*">
             <controls:ObjectTreeView Grid.Column="0" DataContext="{Binding ObjectTree}"/>
             <GridSplitter Grid.Column="1" Width="4" ResizeDirection="Columns"/>
 
@@ -88,9 +91,9 @@
             <GridSplitter Grid.Column="3" Width="4" ResizeDirection="Columns"/>
 
             <controls:PropertiesPanelView Grid.Column="4" DataContext="{Binding PropertiesPanel}"/>
-            <GridSplitter Grid.Column="5" Width="4" ResizeDirection="Columns"/>
+            <GridSplitter Grid.Column="5" Width="4" ResizeDirection="Columns" IsVisible="{Binding IsPreviewVisible}"/>
 
-            <Grid Grid.Column="6">
+            <Grid Grid.Column="6" IsVisible="{Binding IsPreviewVisible}">
                 <ScrollViewer Background="#D8D8D8">
                     <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="8"
                             Background="White" BorderBrush="Gray" BorderThickness="1">

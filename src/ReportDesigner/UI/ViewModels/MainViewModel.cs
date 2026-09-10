@@ -22,6 +22,9 @@ public partial class MainViewModel : ViewModelBase
     /// ссылается на источник данных, которого больше нет — источники не сохраняются в .frx,
     /// см. docs/ARCHITECTURE.md). Показывается вместо/поверх превью, не роняя приложение.</summary>
     [ObservableProperty] public partial string? PreviewErrorMessage { get; set; }
+    /// <summary>Видимость панели превью (меню «Вид» → «Панель превью») — панель забирает
+    /// заметную часть ширины окна, при работе с деревом/канвасом её удобно временно скрывать.</summary>
+    [ObservableProperty] public partial bool IsPreviewVisible { get; set; } = true;
 
     public DesignSurfaceViewModel DesignSurface { get; }
     public ObjectTreeViewModel ObjectTree { get; }
