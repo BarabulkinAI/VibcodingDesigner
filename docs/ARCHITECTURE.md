@@ -60,9 +60,14 @@ src/ReportDesigner/
 │   └── IUndoRedoService.cs     # (этап 4) undo/redo на снимках
 ├── UI/
 │   ├── Views/Controls/DesignSurface.cs        # канвас: рендер, зум (Ctrl+колесо), drag/resize/клавиши
+│   ├── Views/Controls/DesignCanvasView.axaml(.cs) # линейки+ScrollViewer+DesignSurface как один UserControl (Dock-документ)
+│   ├── Views/Controls/PreviewPanelView.axaml(.cs) # превью документа как отдельная Dock-панель
 │   ├── Views/Dialogs/ConfirmDiscardChangesDialog.axaml(.cs)
 │   ├── ViewModels/              # MainViewModel, DesignSurfaceViewModel, ObjectTreeViewModel,
 │   │                             # PropertiesPanelViewModel
+│   ├── Docking/                 # Dock.Avalonia: MainDockFactory + тонкие обёртки Tool/Document
+│   │                             # (ObjectTreeTool, PropertiesTool, DataSourcesTool, PreviewTool,
+│   │                             # DesignCanvasDocument) вокруг существующих ViewModel — см. «Дорожная карта»
 │   └── App.axaml / MainWindow.axaml
 tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отчёта и его свойства, геометрия/hit-test,
                                   # DesignSurfaceViewModel, ObjectTreeViewModel, PropertiesPanelViewModel,
@@ -221,6 +226,56 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
       совпадают в пределах 1px (разница — субпиксельное округление
       растеризатора, не позиционная ошибка).
 
+- **Dock (пункт бэклога) реализован 2026-09-15** — раскладка рабочих зон
+  (дерево объектов, канвас, свойства, превью, источники данных) переведена со
+  статичного `Grid`+`GridSplitter` на `Dock.Avalonia`/`Dock.Model.Mvvm`
+  (`12.1.0.6`, под `Avalonia 12.1.1`/`net10.0` — точное совпадение версий
+  подтверждено по NuGet перед установкой). Панели теперь перетаскиваются,
+  перестыковываются и открепляются в отдельные окна.
+  - Существующие ViewModel-и (`ObjectTreeViewModel`, `PropertiesPanelViewModel`,
+    `DataSourcesViewModel`, `DesignSurfaceViewModel`) не переписывались —
+    `UI/Docking/*` содержит только тонкие обёртки (`ObjectTreeTool`,
+    `PropertiesTool`, `DataSourcesTool`, `PreviewTool : Tool`,
+    `DesignCanvasDocument : Document`), каждая хранит ссылку на «свою» VM в
+    свойстве `ViewModel`; View подбирается через `Application.DataTemplates`
+    в `App.axaml` (`DataType` = класс обёртки → соответствующий `UserControl`
+    с `DataContext="{Binding ViewModel}"`).
+  - Перед добавлением Dock-сложности две самые нестандартные части
+    (кастомные lookless `Control` без DataContext-биндинга — `RulerView`,
+    `DesignSurface`) стабилизированы в собственных `UserControl`:
+    `DesignCanvasView` (линейки + `ScrollViewer` + `DesignSurface`, раньше
+    инлайново в `MainWindow.axaml`) и `PreviewPanelView` (было инлайново,
+    без отдельной VM — `DataContext` остался `MainViewModel`, как и раньше).
+    Синхронизация скролла канваса с линейками (`ScrollViewer.ScrollChanged`,
+    т.к. `ScrollViewer.Offset` не биндится) переехала из
+    `MainWindow.axaml.cs` в `DesignCanvasView.axaml.cs` без изменений —
+    чисто механический перенос кода-бихайнда вместе с владением именованными
+    элементами.
+  - `MainDockFactory : Factory` (`UI/Docking/MainDockFactory.cs`) строит
+    дерево `RootDock → ProportionalDock(вертикальный: верхний ряд + сплиттер
+    + ToolDock источников данных) → ProportionalDock(горизонтальный: дерево
+    | канвас-Document | свойства | превью)` — пропорции подобраны по весам
+    старых колонок Grid, `InitLayout` регистрирует `HostWindowLocator`
+    (`Dock.Avalonia.Controls.HostWindow`) — без него открепление панели в
+    плавающее окно не работает.
+  - **Видимость панели превью НЕ переведена на встроенный крестик закрытия
+    Dock** — решение принято сознательно, а не по ограничению API: `PreviewTool.
+    CanClose = false`, чекбокс «Вид → Панель превью»
+    (`MainViewModel.IsPreviewVisible`) остаётся единственным источником
+    истины и управляет видимостью напрямую через
+    `MainDockFactory.SetPreviewVisible(bool)` (add/remove из
+    `PreviewToolDock.VisibleDockables`) — так чекбокс и фактическое
+    состояние панели не могут разойтись (стандартный крестик закрытия дал бы
+    пользователю второй, несинхронизированный способ прятать панель).
+  - Раскладка не сериализуется/не сохраняется между запусками
+    (`Dock.Serializer.*` сознательно не подключался) — `CreateLayout()`
+    каждый раз строит один и тот же дефолт; это то же поведение, что было и
+    до Dock (раскладка и раньше была фиксирована в XAML), не регресс.
+  - `dotnet test` — 216/216 без изменений (Dock-код — обвязка/UI, логика
+    существующих VM не менялась). Приложение проверено ручным smoke-тестом
+    (`dotnet run`, без падений при старте); полноценный ручной прогон
+    (перетаскивание/открепление/сворачивание панелей) — за пользователем.
+
 ## Бэклог (кандидаты на будущие этапы)
 
 Не запланированы по фазам, зафиксированы по просьбе пользователя после ручной
@@ -233,16 +288,6 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
   между ними в UI и адаптация канваса/дерева объектов под несколько страниц — не
   реализовано, потребует более широких изменений, чем остальные пункты бэклога.
 
-Зафиксированы по просьбе пользователя 2026-09-10, после работы над размерами страницы:
-
-- **Внедрить NuGet `Dock` для Avalonia** (https://github.com/wieslawsoltes/Dock) —
-  заменить текущую раскладку (статичный `Grid` + `GridSplitter` в `MainWindow.axaml`)
-  на настоящие плавающие/перестыковываемые панели для более удобного размещения
-  рабочих зон (дерево объектов, канвас, свойства, источники данных, превью).
-  Существенно более крупная переработка UI, чем остальные пункты бэклога —
-  затронет практически весь `MainWindow.axaml` и, вероятно, потребует спрятать
-  часть уже сделанных панелей (`ObjectTreeView`, `PropertiesPanelView`,
-  `DataSourcesView`, превью) за `Dock`-обёртки/инструменты.
 Известные ограничения из этапов 3-4, ещё не устранённые (см. «Известные риски» ниже):
 поддержка GroupFooter/Child-полос, копирование/вставка `Picture`-объектов, PDF-экспорт.
 

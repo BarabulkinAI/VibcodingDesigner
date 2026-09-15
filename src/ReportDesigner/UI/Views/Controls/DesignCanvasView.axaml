@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:vm="clr-namespace:ReportDesigner.UI.ViewModels"
+             xmlns:controls="clr-namespace:ReportDesigner.UI.Views.Controls"
+             mc:Ignorable="d" d:DesignWidth="600" d:DesignHeight="400"
+             x:Class="ReportDesigner.UI.Views.Controls.DesignCanvasView"
+             x:DataType="vm:DesignSurfaceViewModel">
+
+    <Grid RowDefinitions="18,*" ColumnDefinitions="18,*">
+        <Border Grid.Row="0" Grid.Column="0" Background="#F0F0F0" BorderBrush="#D0D0D0" BorderThickness="0,0,1,1"/>
+        <controls:RulerView Grid.Row="0" Grid.Column="1" Name="HorizontalRuler"
+                             Orientation="Horizontal" Zoom="{Binding Zoom}"/>
+        <controls:RulerView Grid.Row="1" Grid.Column="0" Name="VerticalRuler"
+                             Orientation="Vertical" Zoom="{Binding Zoom}"/>
+        <ScrollViewer Grid.Row="1" Grid.Column="1" Name="CanvasScrollViewer"
+                      HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto">
+            <controls:DesignSurface ViewModel="{Binding}"/>
+        </ScrollViewer>
+    </Grid>
+
+</UserControl>

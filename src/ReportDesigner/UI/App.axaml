@@ -1,10 +1,32 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:dockFluent="clr-namespace:Dock.Avalonia.Themes.Fluent;assembly=Dock.Avalonia.Themes.Fluent"
+             xmlns:docking="clr-namespace:ReportDesigner.UI.Docking"
+             xmlns:controls="clr-namespace:ReportDesigner.UI.Views.Controls"
              x:Class="ReportDesigner.App"
              RequestedThemeVariant="Light">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
 
     <Application.Styles>
         <FluentTheme />
+        <dockFluent:DockFluentTheme />
     </Application.Styles>
+
+    <Application.DataTemplates>
+        <DataTemplate DataType="docking:ObjectTreeTool" x:DataType="docking:ObjectTreeTool">
+            <controls:ObjectTreeView DataContext="{Binding ViewModel}"/>
+        </DataTemplate>
+        <DataTemplate DataType="docking:PropertiesTool" x:DataType="docking:PropertiesTool">
+            <controls:PropertiesPanelView DataContext="{Binding ViewModel}"/>
+        </DataTemplate>
+        <DataTemplate DataType="docking:DataSourcesTool" x:DataType="docking:DataSourcesTool">
+            <controls:DataSourcesView DataContext="{Binding ViewModel}"/>
+        </DataTemplate>
+        <DataTemplate DataType="docking:PreviewTool" x:DataType="docking:PreviewTool">
+            <controls:PreviewPanelView DataContext="{Binding ViewModel}"/>
+        </DataTemplate>
+        <DataTemplate DataType="docking:DesignCanvasDocument" x:DataType="docking:DesignCanvasDocument">
+            <controls:DesignCanvasView DataContext="{Binding ViewModel}"/>
+        </DataTemplate>
+    </Application.DataTemplates>
 </Application>

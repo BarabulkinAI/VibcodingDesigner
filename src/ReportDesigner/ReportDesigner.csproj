@@ -23,6 +23,9 @@
             <PrivateAssets Condition="'$(Configuration)' != 'Debug'">All</PrivateAssets>
         </PackageReference>
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+        <PackageReference Include="Dock.Avalonia" Version="12.1.0.6" />
+        <PackageReference Include="Dock.Avalonia.Themes.Fluent" Version="12.1.0.6" />
+        <PackageReference Include="Dock.Model.Mvvm" Version="12.1.0.6" />
         <PackageReference Include="FastReport.OpenSource" Version="2026.2.3" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
     </ItemGroup>

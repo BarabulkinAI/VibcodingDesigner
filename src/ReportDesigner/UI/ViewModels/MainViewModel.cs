@@ -1,7 +1,9 @@
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Controls;
 using ReportDesigner.Services;
+using ReportDesigner.UI.Docking;
 using ReportDesigner.ViewModels;
 
 namespace ReportDesigner.UI.ViewModels;
@@ -31,6 +33,9 @@ public partial class MainViewModel : ViewModelBase
     public PropertiesPanelViewModel PropertiesPanel { get; }
     public DataSourcesViewModel DataSources { get; }
 
+    private readonly MainDockFactory _dockFactory;
+    public IRootDock DockLayout { get; }
+
     public Bitmap? PreviewImage { get; private set; }
     public event Action? PreviewChanged;
 
@@ -57,6 +62,10 @@ public partial class MainViewModel : ViewModelBase
         PropertiesPanel = new PropertiesPanelViewModel(_fastReportService, DesignSurface, _filesService);
         DataSources = new DataSourcesViewModel(_fastReportService, DesignSurface);
 
+        _dockFactory = new MainDockFactory(this);
+        DockLayout = _dockFactory.CreateLayout();
+        _dockFactory.InitLayout(DockLayout);
+
         RefreshPreview();
         UpdateTitle();
         RefreshRecentFiles();
@@ -67,6 +76,8 @@ public partial class MainViewModel : ViewModelBase
         RefreshPreview();
         UpdateTitle();
     }
+
+    partial void OnIsPreviewVisibleChanged(bool value) => _dockFactory.SetPreviewVisible(value);
 
     public void RefreshPreview()
     {
