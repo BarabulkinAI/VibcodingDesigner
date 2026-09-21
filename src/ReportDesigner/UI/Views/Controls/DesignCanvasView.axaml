@@ -8,13 +8,42 @@
              x:Class="ReportDesigner.UI.Views.Controls.DesignCanvasView"
              x:DataType="vm:DesignSurfaceViewModel">
 
-    <Grid RowDefinitions="18,*" ColumnDefinitions="18,*">
-        <Border Grid.Row="0" Grid.Column="0" Background="#F0F0F0" BorderBrush="#D0D0D0" BorderThickness="0,0,1,1"/>
-        <controls:RulerView Grid.Row="0" Grid.Column="1" Name="HorizontalRuler"
+    <UserControl.Styles>
+        <Style Selector="Button.pageTab">
+            <Setter Property="Padding" Value="10,2"/>
+            <Setter Property="MinHeight" Value="24"/>
+        </Style>
+        <Style Selector="Button.pageTab.active">
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource SystemAccentColor}"/>
+            <Setter Property="BorderThickness" Value="0,0,0,2"/>
+        </Style>
+    </UserControl.Styles>
+
+    <Grid RowDefinitions="Auto,18,*" ColumnDefinitions="18,*">
+        <StackPanel Grid.Row="0" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal" Spacing="2" Margin="0,0,0,2">
+            <ItemsControl ItemsSource="{Binding PageTabs}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Orientation="Horizontal" Spacing="2"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PageTab">
+                        <Button Classes="pageTab" Classes.active="{Binding IsActive}"
+                                Content="{Binding Title}" Tag="{Binding Name}" Click="OnPageTabClick"/>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <Button Classes="pageTab" Content="+" ToolTip.Tip="Добавить страницу" Command="{Binding AddPageCommand}"/>
+            <Button Classes="pageTab" Content="&#215;" ToolTip.Tip="Удалить текущую страницу" Command="{Binding RemovePageCommand}"/>
+        </StackPanel>
+        <Border Grid.Row="1" Grid.Column="0" Background="#F0F0F0" BorderBrush="#D0D0D0" BorderThickness="0,0,1,1"/>
+        <controls:RulerView Grid.Row="1" Grid.Column="1" Name="HorizontalRuler"
                              Orientation="Horizontal" Zoom="{Binding Zoom}"/>
-        <controls:RulerView Grid.Row="1" Grid.Column="0" Name="VerticalRuler"
+        <controls:RulerView Grid.Row="2" Grid.Column="0" Name="VerticalRuler"
                              Orientation="Vertical" Zoom="{Binding Zoom}"/>
-        <ScrollViewer Grid.Row="1" Grid.Column="1" Name="CanvasScrollViewer"
+        <ScrollViewer Grid.Row="2" Grid.Column="1" Name="CanvasScrollViewer"
                       HorizontalScrollBarVisibility="Auto"
                       VerticalScrollBarVisibility="Auto">
             <controls:DesignSurface ViewModel="{Binding}"/>

@@ -61,16 +61,7 @@ public class FastReportService : IFastReportService
         _dataSources.Clear();
         ResetUndoHistory();
         CurrentReport = new Report();
-        var page = new ReportPage { Name = EnsureUniqueComponentName("Page") };
-        page.PaperHeight = 297; // A4, мм
-        page.PaperWidth = 210;  // A4, мм
-        CurrentReport.Pages.Add(page);
-
-        AddBand(BandKind.ReportTitle, 2f);
-        AddBand(BandKind.PageHeader, 2f);
-        AddBand(BandKind.Data, 2f);
-        AddBand(BandKind.PageFooter, 2f);
-        AddBand(BandKind.ReportSummary, 2f);
+        CreateStandardPage();
 
         // Новый документ: пути ещё нет, несохранённых изменений нет.
         _currentFilePath = null;
@@ -85,6 +76,7 @@ public class FastReportService : IFastReportService
         var report = new Report();
         report.Load(path); // FastReport сам пересоберёт зависимости
         CurrentReport = report;
+        _activePageName = null;
         // .frx сохраняет источник данных как компонент (TableDataSource) без реальных строк —
         // при повторной загрузке DataBand.DataSource ссылается на "пустышку", и Prepare() падает
         // с DataTableException ("Table is not connected to the data"). Реальные данные и
@@ -104,6 +96,7 @@ public class FastReportService : IFastReportService
         var report = new Report();
         report.Load(path);
         CurrentReport = report;
+        _activePageName = null;
         // См. комментарий в Load() выше — тот же sidecar с образцовыми данными восстанавливается
         // и для шаблона, иначе [Источник.Колонка] в тексте шаблона сразу сломает Prepare().
         var sidecar = LoadDataSourcesSidecar(path);
@@ -129,11 +122,69 @@ public class FastReportService : IFastReportService
         _isDirty = false;
     }
 
-    public DesignSnapshot GetSnapshot() => DesignSnapshotBuilder.Build(CurrentReport);
+    public DesignSnapshot GetSnapshot() => DesignSnapshotBuilder.Build(CurrentReport, GetActivePage().Name);
 
     // ------------------------------------------------------------------
-    // Страница
+    // Страницы
     // ------------------------------------------------------------------
+
+    /// <summary>Имя активной страницы — той, на которой работают AddBand/SetPageSize/GetPageSize и
+    /// которую показывает канвас. Хранится по имени, а не по индексу: Undo/Redo пересоздаёт
+    /// <see cref="CurrentReport"/> из байтов, имя переживает это; если страницы с таким именем
+    /// больше нет (например, отменили её добавление) — активной считается первая.</summary>
+    private string? _activePageName;
+
+    public string ActivePageName => GetActivePage().Name;
+
+    public void SetActivePage(string name)
+    {
+        var page = CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault(p => p.Name == name)
+            ?? throw new KeyNotFoundException($"Страница '{name}' не найдена.");
+        _activePageName = page.Name; // не мутация документа: без IsDirty и без чекпойнта
+    }
+
+    public string AddPage()
+    {
+        var name = CreateStandardPage();
+        _isDirty = true;
+        return name;
+    }
+
+    public void RemovePage(string name)
+    {
+        var pages = CurrentReport.Pages.OfType<ReportPage>().ToList();
+        if (pages.Count <= 1)
+            throw new InvalidOperationException("Нельзя удалить единственную страницу отчёта.");
+
+        var index = pages.FindIndex(p => p.Name == name);
+        if (index < 0) throw new KeyNotFoundException($"Страница '{name}' не найдена.");
+
+        var wasActive = GetActivePage().Name == name;
+        var removed = pages[index];
+        var neighbour = pages[index == pages.Count - 1 ? index - 1 : index + 1];
+        CurrentReport.Pages.Remove(removed);
+        removed.Dispose();
+        if (wasActive) _activePageName = neighbour.Name;
+        _isDirty = true;
+    }
+
+    /// <summary>Создаёт страницу A4 со стандартным набором полос (как у нового документа),
+    /// делает её активной и возвращает имя.</summary>
+    private string CreateStandardPage()
+    {
+        var page = new ReportPage { Name = EnsureUniqueComponentName("Page") };
+        page.PaperHeight = 297; // A4, мм
+        page.PaperWidth = 210;  // A4, мм
+        CurrentReport.Pages.Add(page);
+        _activePageName = page.Name;
+
+        AddBand(BandKind.ReportTitle, 2f);
+        AddBand(BandKind.PageHeader, 2f);
+        AddBand(BandKind.Data, 2f);
+        AddBand(BandKind.PageFooter, 2f);
+        AddBand(BandKind.ReportSummary, 2f);
+        return page.Name;
+    }
 
     /// <summary>Ширина/высота книжной (portrait) ориентации пресета, мм.</summary>
     private static (float WidthMm, float HeightMm) PresetPortraitSizeMm(PageSizePreset preset) => preset switch
@@ -145,7 +196,7 @@ public class FastReportService : IFastReportService
 
     public void SetPageSize(PageSizePreset preset, bool landscape)
     {
-        var page = GetFirstPage();
+        var page = GetActivePage();
         var (widthMm, heightMm) = PresetPortraitSizeMm(preset);
 
         // ReportPage.Landscape свопает PaperWidth/PaperHeight (и поля) сама, но только когда
@@ -164,7 +215,7 @@ public class FastReportService : IFastReportService
 
     public (PageSizePreset Preset, bool Landscape) GetPageSize()
     {
-        var page = GetFirstPage();
+        var page = GetActivePage();
         var landscape = page.Landscape;
         var (currentWidthMm, currentHeightMm) = landscape
             ? (page.PaperHeight, page.PaperWidth) // приводим к книжной ориентации для сравнения с пресетами
@@ -200,7 +251,7 @@ public class FastReportService : IFastReportService
                 $"Полоса вида '{kind}' не может быть добавлена самостоятельно — она " +
                 "привязывается к родительской полосе, управление такими полосами пока не поддерживается.");
 
-        var page = GetFirstPage();
+        var page = GetActivePage();
         var height = heightCm * Units.Centimeters;
 
         BandBase band = kind switch
@@ -226,9 +277,7 @@ public class FastReportService : IFastReportService
 
     public void RemoveBand(string bandName)
     {
-        var page = GetFirstPage();
-        var band = EnumerateAllBands(page).FirstOrDefault(b => b.Name == bandName)
-            ?? throw new KeyNotFoundException($"Полоса '{bandName}' не найдена.");
+        var (page, band) = FindBandAndPage(bandName);
         page.RemoveChild(band);
         _isDirty = true;
     }
@@ -510,8 +559,9 @@ public class FastReportService : IFastReportService
     // Внутреннее
     // ------------------------------------------------------------------
 
-    private ReportPage GetFirstPage() =>
-        CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault()
+    private ReportPage GetActivePage() =>
+        CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault(p => p.Name == _activePageName)
+        ?? CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault()
         ?? throw new InvalidOperationException("Отчёт не содержит страниц. Сначала вызовите CreateNew().");
 
     /// <summary>
@@ -531,17 +581,25 @@ public class FastReportService : IFastReportService
         if (page.Overlay != null) yield return page.Overlay;
     }
 
+    /// <summary>Имена полос уникальны на весь отчёт, поэтому по имени ищем по всем страницам, а
+    /// не только по активной; без имени — полоса данных активной страницы.</summary>
     private BandBase FindBand(string? bandName = null)
     {
-        var page = GetFirstPage();
-        if (bandName != null)
-        {
-            var band = EnumerateAllBands(page).FirstOrDefault(b => b.Name == bandName)
-                ?? throw new KeyNotFoundException($"Полоса '{bandName}' не найдена.");
-            return band;
-        }
+        if (bandName != null) return FindBandAndPage(bandName).Band;
+
+        var page = GetActivePage();
         return EnumerateAllBands(page).OfType<DataBand>().FirstOrDefault()
             ?? throw new InvalidOperationException("В отчёте нет полосы данных. Добавьте её через AddBand(BandKind.Data).");
+    }
+
+    private (ReportPage Page, BandBase Band) FindBandAndPage(string bandName)
+    {
+        foreach (var page in CurrentReport.Pages.OfType<ReportPage>())
+        {
+            if (EnumerateAllBands(page).FirstOrDefault(b => b.Name == bandName) is { } band)
+                return (page, band);
+        }
+        throw new KeyNotFoundException($"Полоса '{bandName}' не найдена.");
     }
 
     private ReportComponentBase FindObject(string objectName) => FindBandAndObject(objectName).Object;
@@ -723,7 +781,6 @@ public class FastReportService : IFastReportService
         string? renamedTo = null,
         IReadOnlyDictionary<string, string>? explicitBandAssignments = null)
     {
-        var page = CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault();
         var bandAssignments = explicitBandAssignments
             ?? CaptureLiveBandAssignments(renamedFrom, renamedTo);
 
@@ -752,11 +809,10 @@ public class FastReportService : IFastReportService
             CurrentReport.GetDataSource(def.Name)!.Enabled = true;
         }
 
-        if (page == null) return;
-
+        var dataBands = CurrentReport.Pages.OfType<ReportPage>().SelectMany(EnumerateAllBands).OfType<DataBand>().ToList();
         foreach (var (bandName, sourceName) in bandAssignments)
         {
-            var band = EnumerateAllBands(page).OfType<DataBand>().FirstOrDefault(b => b.Name == bandName);
+            var band = dataBands.FirstOrDefault(b => b.Name == bandName);
             if (band == null) continue; // привязка на несуществующую/переименованную полосу — молча пропускаем
 
             // ClearRegisteredData() снимает связь TableDataSource с данными, но не убирает сам
@@ -778,10 +834,7 @@ public class FastReportService : IFastReportService
     private Dictionary<string, string> CaptureLiveBandAssignments(string? renamedFrom = null, string? renamedTo = null)
     {
         var result = new Dictionary<string, string>();
-        var page = CurrentReport.Pages.OfType<ReportPage>().FirstOrDefault();
-        if (page == null) return result;
-
-        foreach (var band in EnumerateAllBands(page).OfType<DataBand>())
+        foreach (var band in CurrentReport.Pages.OfType<ReportPage>().SelectMany(EnumerateAllBands).OfType<DataBand>())
         {
             if (band.DataSource is not { } ds) continue;
             result[band.Name] = ds.Name == renamedFrom ? renamedTo! : ds.Name;

@@ -95,7 +95,7 @@ public class DesignSurface : Control
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        var page = ViewModel?.Snapshot.Pages.Count > 0 ? ViewModel.Snapshot.Pages[0] : null;
+        var page = ViewModel?.Snapshot.ActivePage;
         if (ViewModel is null || page is null) return default;
 
         var zoom = ViewModel.Zoom;
@@ -114,7 +114,7 @@ public class DesignSurface : Control
         context.DrawRectangle(DesktopBrush, null, new AvRect(Bounds.Size));
 
         var vm = ViewModel;
-        var page = vm?.Snapshot.Pages.Count > 0 ? vm.Snapshot.Pages[0] : null;
+        var page = vm?.Snapshot.ActivePage;
         if (vm is null || page is null) return;
 
         var zoom = (float)vm.Zoom;
@@ -306,9 +306,9 @@ public class DesignSurface : Control
             return;
         }
 
-        if (vm.FindSelectedObject() is { } selected && vm.Snapshot.Pages.Count > 0)
+        if (vm.FindSelectedObject() is { } selected && vm.Snapshot.ActivePage is { } activePage)
         {
-            var pageBounds = ToPageBounds(vm.Snapshot.Pages[0], selected.Band, selected.Object.Bounds);
+            var pageBounds = ToPageBounds(activePage, selected.Band, selected.Object.Bounds);
             var allowedHandles = ResizeGeometry.AllowedHandles(selected.Object.Type);
             if (ResizeGeometry.HitTest(pageBounds, HandleSizePx, point, allowedHandles) is { } handle)
             {
@@ -354,9 +354,9 @@ public class DesignSurface : Control
         if (vm.PendingToolType is not null) return;
 
         var handle = vm.ActiveResizeHandle;
-        if (handle is null && vm.FindSelectedObject() is { } selected && vm.Snapshot.Pages.Count > 0)
+        if (handle is null && vm.FindSelectedObject() is { } selected && vm.Snapshot.ActivePage is { } activePage)
         {
-            var pageBounds = ToPageBounds(vm.Snapshot.Pages[0], selected.Band, selected.Object.Bounds);
+            var pageBounds = ToPageBounds(activePage, selected.Band, selected.Object.Bounds);
             var allowedHandles = ResizeGeometry.AllowedHandles(selected.Object.Type);
             handle = ResizeGeometry.HitTest(pageBounds, HandleSizePx, point, allowedHandles);
         }

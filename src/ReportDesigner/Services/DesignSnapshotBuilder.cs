@@ -11,7 +11,7 @@ namespace ReportDesigner.Services;
 /// </summary>
 public static class DesignSnapshotBuilder
 {
-    public static DesignSnapshot Build(Report report)
+    public static DesignSnapshot Build(Report report, string? activePageName = null)
     {
         var pages = new List<PageSnapshot>();
         foreach (var pageBase in report.Pages)
@@ -19,7 +19,7 @@ public static class DesignSnapshotBuilder
             if (pageBase is not ReportPage page) continue;
             pages.Add(BuildPage(page));
         }
-        return new DesignSnapshot { Pages = pages };
+        return new DesignSnapshot { Pages = pages, ActivePageName = activePageName };
     }
 
     private static PageSnapshot BuildPage(ReportPage page)

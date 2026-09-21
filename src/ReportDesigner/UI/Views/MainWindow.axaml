@@ -41,6 +41,10 @@
                 <MenuItem Header="Повторить" Command="{Binding DesignSurface.RedoCommand}"
                           IsEnabled="{Binding DesignSurface.CanRedo}" InputGesture="Ctrl+Y"/>
             </MenuItem>
+            <MenuItem Header="Страница">
+                <MenuItem Header="Добавить страницу" Command="{Binding DesignSurface.AddPageCommand}"/>
+                <MenuItem Header="Удалить страницу" Command="{Binding DesignSurface.RemovePageCommand}"/>
+            </MenuItem>
             <MenuItem Header="Вид">
                 <MenuItem Header="Панель превью" ToggleType="CheckBox" IsChecked="{Binding IsPreviewVisible, Mode=TwoWay}"/>
             </MenuItem>

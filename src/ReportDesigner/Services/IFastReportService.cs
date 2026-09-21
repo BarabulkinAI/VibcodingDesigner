@@ -30,7 +30,19 @@ public interface IFastReportService
     /// <summary>Лёгкий снимок отчёта для отрисовки канваса и дерева объектов.</summary>
     DesignSnapshot GetSnapshot();
 
-    // --- Страница ---
+    // --- Страницы ---
+    /// <summary>Имя активной страницы: на ней работают <see cref="AddBand"/>,
+    /// <see cref="SetPageSize"/>, <see cref="GetPageSize"/>, её же показывает канвас.</summary>
+    string ActivePageName { get; }
+    /// <summary>Переключает активную страницу. Не мутация документа (без IsDirty/чекпойнта).</summary>
+    void SetActivePage(string name);
+    /// <summary>Добавляет страницу A4 со стандартным набором полос, делает её активной и
+    /// возвращает имя.</summary>
+    string AddPage();
+    /// <summary>Удаляет страницу; последнюю страницу удалить нельзя.</summary>
+    void RemovePage(string name);
+
+    // --- Параметры активной страницы ---
     /// <summary>Задаёт размер бумаги по пресету (A4/A3) и ориентацию. Не сбрасывает объекты —
     /// уже размещённые могут визуально выйти за пределы нового размера, если он меньше прежнего
     /// (осознанное ограничение, как и у ClampVertical при ресайзе полос).</summary>

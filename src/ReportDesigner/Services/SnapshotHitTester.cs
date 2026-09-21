@@ -25,7 +25,7 @@ public static class SnapshotHitTester
         // MarginLeft — сдвиг полос от края бумаги, который реальный движок FastReport применяет
         // при рендере (см. PageSnapshot.MarginLeft); объект хранит X относительно левого края
         // полосы, поэтому его нужно вычесть при переводе клика в band-относительные координаты.
-        var marginLeftPx = snapshot.Pages[0].MarginLeft;
+        var marginLeftPx = snapshot.ActivePage!.MarginLeft; // FindBandAt выше уже вернул полосу, значит страница есть
         var bandRelativePoint = new PointF(pagePointPx.X - marginLeftPx, pagePointPx.Y - band.Top);
         for (var i = band.Objects.Count - 1; i >= 0; i--)
         {
@@ -48,8 +48,7 @@ public static class SnapshotHitTester
     /// в какую полосу попадёт новый объект, размещаемый через Toolbox.</summary>
     public static BandSnapshot? FindBandAt(DesignSnapshot snapshot, PointF pagePointPx)
     {
-        if (snapshot.Pages.Count == 0) return null;
-        var page = snapshot.Pages[0];
+        if (snapshot.ActivePage is not { } page) return null;
 
         foreach (var band in page.Bands)
         {

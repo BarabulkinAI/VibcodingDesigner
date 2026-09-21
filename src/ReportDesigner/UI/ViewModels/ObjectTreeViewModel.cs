@@ -80,6 +80,7 @@ public partial class ObjectTreeViewModel : ViewModelBase
         _designSurface = designSurface;
 
         _designSurface.DocumentChanged += RebuildTree;
+        _designSurface.ActivePageChanged += RebuildTree;
         _designSurface.PropertyChanged += OnDesignSurfacePropertyChanged;
 
         RebuildTree();
@@ -153,7 +154,7 @@ public partial class ObjectTreeViewModel : ViewModelBase
     private void RebuildTree()
     {
         var snapshot = _designSurface.Snapshot;
-        var page = snapshot.Pages.Count > 0 ? snapshot.Pages[0] : null;
+        var page = snapshot.ActivePage;
 
         Bands = page is null
             ? Array.Empty<ObjectTreeBandNode>()

@@ -119,7 +119,7 @@ public partial class DesignSurfaceViewModel : ViewModelBase
         // MarginLeft — сдвиг полос от края бумаги в реальном движке FastReport (см.
         // PageSnapshot.MarginLeft); объект хранит X относительно левого края полосы, поэтому его
         // нужно вычесть, иначе объект окажется правее того места, где реально кликнули.
-        var marginLeftPx = Snapshot.Pages[0].MarginLeft;
+        var marginLeftPx = Snapshot.ActivePage!.MarginLeft; // FindBandAt выше уже вернул полосу, значит страница есть
         var (widthPx, heightPx) = DefaultSizePx(type);
         var bounds = ResizeGeometry.ClampVertical(
             new RectangleF(pagePointPx.X - marginLeftPx, pagePointPx.Y - band.Top, widthPx, heightPx), band.Height);
@@ -305,8 +305,10 @@ public partial class DesignSurfaceViewModel : ViewModelBase
     {
         if (_clipboard is not { } clip) return;
 
-        var allBands = Snapshot.Pages.SelectMany(p => p.Bands).ToList();
-        var targetBand = allBands.FirstOrDefault(b => b.Name == clip.Band.Name) ?? allBands.FirstOrDefault();
+        // Вставляем на активную страницу: в ту же по имени полосу, если она есть, иначе в первую
+        // (при копировании между страницами имена полос разные).
+        var pageBands = Snapshot.ActivePage?.Bands ?? Array.Empty<BandSnapshot>();
+        var targetBand = pageBands.FirstOrDefault(b => b.Name == clip.Band.Name) ?? pageBands.FirstOrDefault();
         if (targetBand is null) return;
 
         var offsetPx = UnitConverter.CmToPx(0.5f);
