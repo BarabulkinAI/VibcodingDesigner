@@ -175,6 +175,14 @@ public class FastReportService : IFastReportService
         var page = new ReportPage { Name = EnsureUniqueComponentName("Page") };
         page.PaperHeight = 297; // A4, мм
         page.PaperWidth = 210;  // A4, мм
+        // new ReportPage() по умолчанию ставит все поля по 10 мм, из-за чего содержимое рисуется с
+        // отступом от края листа. Дизайнер работает в координатах листа, поэтому поля нулевые:
+        // объект с Left=0/Top=0 лежит в самом углу и на канвасе, и в превью. Открытые файлы со
+        // своими полями не трогаем — канвас их учитывает (PageSnapshot.MarginLeft).
+        page.LeftMargin = 0;
+        page.TopMargin = 0;
+        page.RightMargin = 0;
+        page.BottomMargin = 0;
         CurrentReport.Pages.Add(page);
         _activePageName = page.Name;
 

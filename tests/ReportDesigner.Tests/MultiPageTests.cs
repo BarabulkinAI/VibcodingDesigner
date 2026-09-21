@@ -419,4 +419,28 @@ public class MultiPageTests
             File.Delete(twoPath);
         }
     }
+
+    [Fact]
+    public void ExportPng_ObjectAtOrigin_IsRenderedAtSheetCorner()
+    {
+        // Эмпирическая проверка нулевых полей новых страниц: чёрный прямоугольник в (0,0) верхней
+        // полосы должен закрашивать самый угол листа, а не начинаться с отступа 10 мм (~38 px).
+        var service = CreateService();
+        var titleBand = service.GetSnapshot().ActivePage!.Bands.First(b => b.Kind == BandKind.ReportTitle).Name;
+        var shape = service.AddObject(DesignObjectType.Shape, 0, 0, 2, 1, titleBand);
+        service.SetFillColor(shape, Color.Black);
+        var path = Path.Combine(Path.GetTempPath(), $"mp_corner_{Guid.NewGuid():N}.png");
+        try
+        {
+            new ExportService().ExportPng(service.CurrentReport, path);
+
+            using var bitmap = SkiaSharp.SKBitmap.Decode(path);
+            Assert.Equal(0xFF000000u, (uint)bitmap.GetPixel(3, 3));
+            Assert.NotEqual(0xFF000000u, (uint)bitmap.GetPixel(bitmap.Width - 3, 3));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
 }

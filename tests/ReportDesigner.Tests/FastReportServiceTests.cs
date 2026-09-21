@@ -45,16 +45,40 @@ public class FastReportServiceTests
     }
 
     [Fact]
-    public void CreateNew_PageHasDefaultMarginsReflectedInSnapshot()
+    public void CreateNew_PagesHaveZeroMargins_ObjectsStartAtSheetCorner()
     {
-        // Регрессия: FastReport по умолчанию задаёт ReportPage все 4 поля по 10мм (подтверждено
-        // эмпирически — в XML-документации значение по умолчанию не указано), а реальный движок
-        // (Report.Prepare()/экспорт/превью) рисует полосы со сдвигом именно на эти поля от края
-        // бумаги. Раньше канвас не знал о полях вообще и рисовал полосы от (0,0) бумаги — объект
-        // с Left=0/Top=0 на канвасе оказывался в левом верхнем углу листа, а в превью — на 10мм
-        // правее и ниже (см. PageSnapshot.MarginLeft, DesignSnapshotBuilder.BuildPage).
+        // new ReportPage() по умолчанию задаёт все 4 поля по 10мм — содержимое рисовалось с
+        // отступом от края листа. Новые страницы создаются с нулевыми полями.
         var service = new FastReportService();
         service.CreateNew();
+        service.AddPage();
+
+        Assert.All(service.GetSnapshot().Pages, page =>
+        {
+            Assert.Equal(0f, page.MarginLeft);
+            Assert.Equal(0f, page.Bands[0].Top);
+        });
+        Assert.All(service.CurrentReport.Pages.OfType<FastReport.ReportPage>(), page =>
+        {
+            Assert.Equal(0f, page.LeftMargin);
+            Assert.Equal(0f, page.TopMargin);
+            Assert.Equal(0f, page.RightMargin);
+            Assert.Equal(0f, page.BottomMargin);
+        });
+    }
+
+    [Fact]
+    public void Snapshot_ReflectsPageMarginsOfOpenedDocument()
+    {
+        // Регрессия: реальный движок FastReport (Report.Prepare()/экспорт/превью) рисует полосы со
+        // сдвигом на LeftMargin/TopMargin от края бумаги. Открытый файл может иметь ненулевые
+        // поля (в т.ч. 10мм по умолчанию у сторонних .frx) — канвас обязан повторять этот сдвиг
+        // (см. PageSnapshot.MarginLeft, DesignSnapshotBuilder.BuildPage).
+        var service = new FastReportService();
+        service.CreateNew();
+        var reportPage = service.CurrentReport.Pages.OfType<FastReport.ReportPage>().Single();
+        reportPage.LeftMargin = 10f;
+        reportPage.TopMargin = 10f;
 
         var page = service.GetSnapshot().Pages[0];
         var marginPx = UnitConverter.MmToPx(10f);

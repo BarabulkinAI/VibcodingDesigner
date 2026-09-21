@@ -279,7 +279,11 @@ public class DesignSurfaceViewModelTests
     [Fact]
     public void PlaceObjectAt_CreatesObjectAtClickPositionAndSelectsIt()
     {
-        var (service, vm) = CreateEmpty();
+        // Страница с ненулевыми полями (как у открытого файла) — иначе смещение на поле не проверить.
+        var service = new FastReportService();
+        service.CreateNew();
+        service.CurrentReport.Pages.OfType<FastReport.ReportPage>().Single().LeftMargin = 10f;
+        var vm = new DesignSurfaceViewModel(service);
         vm.SelectToolCommand.Execute(DesignObjectType.Text);
 
         var page = service.GetSnapshot().Pages[0];

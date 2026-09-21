@@ -366,7 +366,9 @@ tests/ReportDesigner.Tests/     # xUnit: конвертер, сервис отч
   значение по умолчанию не указано). `Report.Prepare()`/экспорт рисуют содержимое полос со
   сдвигом именно на `LeftMargin`/`TopMargin` от края бумаги — это НЕ часть самих полос, а
   сдвиг страницы; учтено в `DesignSnapshotBuilder`/`DesignSurface`/`SnapshotHitTester`
-  (см. «Сделано», Этап 4);
+  (см. «Сделано», Этап 4); **новые страницы дизайнера создаются с нулевыми полями**
+  (`CreateStandardPage`), чтобы объект с `Left=0/Top=0` лежал в углу листа и на канвасе, и в превью
+  (проверено тестом по пикселю PNG); открытые файлы со своими полями не меняются;
 - `LineObject`: нет `StartPoint/EndPoint/LineWidth/LineColor`; линия настраивается через `Border.Width/Style/Color`, направление — `Diagonal`;
 - PDF-экспорта в OpenSource нет (есть отдельный плагин `FastReport.OpenSource.Export.PdfSimple`);
 - цвет текста — `TextObject.TextColor`, выравнивание — `HorzAlign`/`VertAlign`, скруглённый прямоугольник — `ShapeKind.RoundRectangle`.
