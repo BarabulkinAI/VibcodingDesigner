@@ -20,3 +20,6 @@ tests/ReportDesigner.Tests/obj/Debug/net10.0/ReportDesigner.Tests.csproj.FileLis
 tests/ReportDesigner.Tests/obj/Debug/net10.0/ReportDesigner.Tests.GeneratedMSBuildEditorConfig.editorconfig
 tests/ReportDesigner.Tests/obj/Debug/net10.0/ReportDesigner.Tests.GlobalUsings.g.cs
 tests/ReportDesigner.Tests/obj/Debug/net10.0/Avalonia/Resources.Inputs.cache
+
+# Rider: пользовательские настройки
+*.sln.DotSettings.user
