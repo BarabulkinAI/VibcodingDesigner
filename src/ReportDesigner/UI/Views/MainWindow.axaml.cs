@@ -64,6 +64,7 @@ public partial class MainWindow : Window
         if (await _vm.TryPrepareForCloseAsync())
         {
             _closeConfirmed = true;
+            _vm.SaveLayout();
             Close();
         }
     }

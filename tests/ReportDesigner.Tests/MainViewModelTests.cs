@@ -408,4 +408,81 @@ public class MainViewModelTests
         Assert.Equal(PageSizePreset.A4, preset);
         Assert.False(landscape);
     }
+
+    // --- Сохранение раскладки Dock-панелей ---
+
+    private static MainViewModel CreateWithLayoutStore(IDockLayoutStore store) => new(
+        new FastReportService(), new FakePreviewService(), new FakeFilesService(), new FakeDialogService(),
+        new ExportService(), new RecentFilesService(Path.Combine(Path.GetTempPath(), $"mvm_recent_{Guid.NewGuid():N}.json")), store);
+
+    private sealed class InMemoryLayoutStore : IDockLayoutStore
+    {
+        public string? Content { get; set; }
+        public string? Load() => Content;
+        public void Save(string content) => Content = content;
+    }
+
+    private static IEnumerable<Dock.Model.Core.IDockable> Flatten(Dock.Model.Core.IDockable root)
+    {
+        yield return root;
+        if (root is Dock.Model.Core.IDock { VisibleDockables: { } children })
+            foreach (var child in children)
+                foreach (var nested in Flatten(child))
+                    yield return nested;
+    }
+
+    private static Dock.Model.Controls.IToolDock ToolDockOf<T>(MainViewModel main) where T : Dock.Model.Core.IDockable =>
+        Flatten(main.DockLayout).OfType<Dock.Model.Controls.IToolDock>()
+            .Single(d => d.VisibleDockables!.OfType<T>().Any());
+
+    [Fact]
+    public void Layout_RoundTripsPanelSizesAndRebindsViewModels()
+    {
+        var store = new InMemoryLayoutStore();
+        var first = CreateWithLayoutStore(store);
+        ToolDockOf<ReportDesigner.UI.Docking.ObjectTreeTool>(first).Proportion = 0.33;
+
+        first.SaveLayout();
+        var second = CreateWithLayoutStore(store);
+
+        Assert.Equal(0.33, ToolDockOf<ReportDesigner.UI.Docking.ObjectTreeTool>(second).Proportion);
+        var tools = Flatten(second.DockLayout).ToList();
+        Assert.Same(second.ObjectTree, tools.OfType<ReportDesigner.UI.Docking.ObjectTreeTool>().Single().ViewModel);
+        Assert.Same(second.DesignSurface, tools.OfType<ReportDesigner.UI.Docking.DesignCanvasDocument>().Single().ViewModel);
+        Assert.Same(second.PropertiesPanel, tools.OfType<ReportDesigner.UI.Docking.PropertiesTool>().Single().ViewModel);
+        Assert.Same(second.DataSources, tools.OfType<ReportDesigner.UI.Docking.DataSourcesTool>().Single().ViewModel);
+        Assert.Same(second, tools.OfType<ReportDesigner.UI.Docking.PreviewTool>().Single().ViewModel);
+    }
+
+    [Fact]
+    public void Layout_HiddenPreviewStaysHiddenAndCanBeShownAgain()
+    {
+        var store = new InMemoryLayoutStore();
+        var first = CreateWithLayoutStore(store);
+        first.IsPreviewVisible = false;
+
+        first.SaveLayout();
+        Assert.False(first.IsPreviewVisible); // сериализация не должна менять видимое состояние
+        var second = CreateWithLayoutStore(store);
+
+        Assert.False(second.IsPreviewVisible);
+        Assert.DoesNotContain(Flatten(second.DockLayout), d => d is ReportDesigner.UI.Docking.PreviewTool);
+
+        second.IsPreviewVisible = true;
+
+        Assert.Contains(Flatten(second.DockLayout), d => d is ReportDesigner.UI.Docking.PreviewTool);
+    }
+
+    [Theory]
+    [InlineData("не json")]
+    [InlineData("{\"Version\":999,\"PreviewVisible\":true,\"Layout\":\"{}\"}")]
+    [InlineData("{\"Version\":1,\"PreviewVisible\":true,\"Layout\":\"{ битый\"}")]
+    public void Layout_CorruptOrForeignData_FallsBackToDefaultLayout(string content)
+    {
+        var main = CreateWithLayoutStore(new InMemoryLayoutStore { Content = content });
+
+        var tools = Flatten(main.DockLayout).ToList();
+        Assert.Single(tools.OfType<ReportDesigner.UI.Docking.ObjectTreeTool>());
+        Assert.Single(tools.OfType<ReportDesigner.UI.Docking.PreviewTool>());
+    }
 }

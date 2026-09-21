@@ -1,15 +1,29 @@
 using Dock.Model.Mvvm.Controls;
+using Newtonsoft.Json;
 using ReportDesigner.UI.ViewModels;
 
 namespace ReportDesigner.UI.Docking;
 
 public sealed class DataSourcesTool : Tool
 {
-    public DataSourcesViewModel ViewModel { get; }
+    /// <summary>Не сериализуется вместе с раскладкой — после загрузки привязывается заново
+    /// (<see cref="MainDockFactory.RestoreLayout"/>).</summary>
+    [JsonIgnore]
+    public DataSourcesViewModel ViewModel { get; set; } = null!;
 
-    public DataSourcesTool(DataSourcesViewModel viewModel)
+    /// <summary>Для десериализатора раскладки.</summary>
+    public DataSourcesTool()
+    {
+        Init();
+    }
+
+    public DataSourcesTool(DataSourcesViewModel viewModel) : this()
     {
         ViewModel = viewModel;
+    }
+
+    private void Init()
+    {
         Id = "DataSources";
         Title = "Источники данных";
         CanClose = false;

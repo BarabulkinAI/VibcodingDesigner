@@ -1,4 +1,5 @@
 using Dock.Model.Mvvm.Controls;
+using Newtonsoft.Json;
 using ReportDesigner.UI.ViewModels;
 
 namespace ReportDesigner.UI.Docking;
@@ -11,11 +12,24 @@ namespace ReportDesigner.UI.Docking;
 /// </summary>
 public sealed class PreviewTool : Tool
 {
-    public MainViewModel ViewModel { get; }
+    /// <summary>Не сериализуется вместе с раскладкой — после загрузки привязывается заново
+    /// (<see cref="MainDockFactory.RestoreLayout"/>).</summary>
+    [JsonIgnore]
+    public MainViewModel ViewModel { get; set; } = null!;
 
-    public PreviewTool(MainViewModel viewModel)
+    /// <summary>Для десериализатора раскладки.</summary>
+    public PreviewTool()
+    {
+        Init();
+    }
+
+    public PreviewTool(MainViewModel viewModel) : this()
     {
         ViewModel = viewModel;
+    }
+
+    private void Init()
+    {
         Id = "Preview";
         Title = "Превью";
         CanClose = false;

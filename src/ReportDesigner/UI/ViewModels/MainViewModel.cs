@@ -16,6 +16,7 @@ public partial class MainViewModel : ViewModelBase
     private readonly IDialogService _dialogService;
     private readonly IExportService _exportService;
     private readonly IRecentFilesService _recentFilesService;
+    private readonly IDockLayoutStore? _layoutStore;
     
     [ObservableProperty] public partial string Title { get; set; } = "ReportDesigner";
     [ObservableProperty] public partial bool IsDocumentDirty { get; set; }
@@ -45,7 +46,8 @@ public partial class MainViewModel : ViewModelBase
         IFilesService filesService,
         IDialogService dialogService,
         IExportService exportService,
-        IRecentFilesService recentFilesService)
+        IRecentFilesService recentFilesService,
+        IDockLayoutStore? layoutStore = null)
     {
         _fastReportService = fastReportService;
         _previewService = previewService;
@@ -53,6 +55,7 @@ public partial class MainViewModel : ViewModelBase
         _dialogService = dialogService;
         _exportService = exportService;
         _recentFilesService = recentFilesService;
+        _layoutStore = layoutStore;
 
         _fastReportService.CreateNew();
 
@@ -63,8 +66,12 @@ public partial class MainViewModel : ViewModelBase
         DataSources = new DataSourcesViewModel(_fastReportService, DesignSurface);
 
         _dockFactory = new MainDockFactory(this);
-        DockLayout = _dockFactory.CreateLayout();
+        var restoredPreviewVisible = true;
+        var restored = _layoutStore?.Load() is { } saved ? _dockFactory.RestoreLayout(saved, out restoredPreviewVisible) : null;
+        DockLayout = restored ?? _dockFactory.CreateLayout();
         _dockFactory.InitLayout(DockLayout);
+        // После InitLayout: скрытие превью убирает панель из уже инициализированной раскладки
+        if (!restoredPreviewVisible) IsPreviewVisible = false;
 
         RefreshPreview();
         UpdateTitle();
@@ -76,6 +83,10 @@ public partial class MainViewModel : ViewModelBase
         RefreshPreview();
         UpdateTitle();
     }
+
+    /// <summary>Сохраняет текущую раскладку панелей для следующего запуска (вызывается при закрытии
+    /// окна).</summary>
+    public void SaveLayout() => _layoutStore?.Save(_dockFactory.SerializeLayout(DockLayout, IsPreviewVisible));
 
     partial void OnIsPreviewVisibleChanged(bool value) => _dockFactory.SetPreviewVisible(value);
 

@@ -21,6 +21,7 @@ public static class BuildServiceProvider
         services.AddSingleton<IFilesService, FilesService>();
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IRecentFilesService>(_ => new RecentFilesService(RecentFilesService.DefaultFilePath));
+        services.AddSingleton<IDockLayoutStore>(_ => new DockLayoutStore(DockLayoutStore.DefaultFilePath));
         // services.AddSingleton<IMyService, MyService>();
         // services.AddTransient<IMyTransientService, MyTransientService>();
 
