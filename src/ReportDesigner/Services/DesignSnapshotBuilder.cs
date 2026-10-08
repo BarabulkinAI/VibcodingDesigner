@@ -34,50 +34,79 @@ public static class DesignSnapshotBuilder
         // band-относительный X переводится в/из координат страницы (см. PageSnapshot.MarginLeft).
         var marginLeftPx = UnitConverter.MmToPx(page.LeftMargin);
         var marginTopPx = UnitConverter.MmToPx(page.TopMargin);
+        var marginBottomPx = UnitConverter.MmToPx(page.BottomMargin);
+        var pageHeightPx = UnitConverter.MmToPx(page.PaperHeight);
+
+        // PageFooter реальный движок всегда прижимает к низу листа; ReportSummary — только когда
+        // у него явно выставлен BandBase.PrintOnBottom (без флага печатается сразу после
+        // ColumnFooter/данных, как обычная полоса потока) — подтверждено эмпирически побайтовым
+        // анализом экспортированного PNG (см. docs/ARCHITECTURE.md, «Бэклог»).
+        var pinnedToBottom = new List<BandBase>();
+        if (page.ReportSummary is { PrintOnBottom: true } summary) pinnedToBottom.Add(summary);
+        if (page.PageFooter is { } footer) pinnedToBottom.Add(footer);
 
         var bands = new List<BandSnapshot>();
         var topPx = marginTopPx;
-        foreach (BandBase band in EnumerateBands(page))
+        foreach (BandBase band in EnumerateTopFlowBands(page, pinnedToBottom))
         {
             var heightPx = ToPx(band.Height);
-            bands.Add(new BandSnapshot
-            {
-                Name = band.Name,
-                Kind = ToBandKind(band),
-                Top = topPx,
-                Height = heightPx,
-                DataSourceName = (band as DataBand)?.DataSource?.Name,
-                Objects = BuildObjects(band),
-            });
+            bands.Add(BuildBand(band, topPx, heightPx));
             topPx += heightPx;
         }
+
+        // Прижатые к низу полосы начинаются с (низ листа − их суммарная высота), но не выше
+        // topPx — если полос сверху набралось больше, чем остаётся места до низа страницы, они
+        // идут сразу после них, а не заезжают друг на друга.
+        var pinnedHeightPx = pinnedToBottom.Sum(b => ToPx(b.Height));
+        var pinnedTopPx = Math.Max(topPx, pageHeightPx - marginBottomPx - pinnedHeightPx);
+        foreach (var band in pinnedToBottom)
+        {
+            var heightPx = ToPx(band.Height);
+            bands.Add(BuildBand(band, pinnedTopPx, heightPx));
+            pinnedTopPx += heightPx;
+        }
+
+        if (page.Overlay is { } overlay)
+            bands.Add(BuildBand(overlay, topPx, ToPx(overlay.Height))); // оверлей накладывается поверх, его позиция в потоке не критична
 
         return new PageSnapshot
         {
             Name = page.Name,
             Width = UnitConverter.MmToPx(page.PaperWidth),
-            Height = UnitConverter.MmToPx(page.PaperHeight),
+            Height = pageHeightPx,
             MarginLeft = marginLeftPx,
             Bands = bands,
         };
     }
 
+    private static BandSnapshot BuildBand(BandBase band, float topPx, float heightPx) => new()
+    {
+        Name = band.Name,
+        Kind = ToBandKind(band),
+        Top = topPx,
+        Height = heightPx,
+        DataSourceName = (band as DataBand)?.DataSource?.Name,
+        Objects = BuildObjects(band),
+    };
+
     /// <summary>
-    /// Возвращает все полосы страницы в вертикальном порядке отображения.
-    /// Специальные полосы хранятся в отдельных свойствах <see cref="ReportPage"/>,
-    /// а data/group полосы — в коллекции <see cref="ReportPage.Bands"/>.
+    /// Возвращает полосы, идущие обычным потоком сверху вниз (без тех, что прижаты к низу
+    /// страницы — см. <paramref name="pinnedToBottom"/>). Специальные полосы хранятся в отдельных
+    /// свойствах <see cref="ReportPage"/>, а data/group полосы — в коллекции
+    /// <see cref="ReportPage.Bands"/>. ColumnFooter печатается сразу после данных колонки, ПЕРЕД
+    /// ReportSummary — подтверждено эмпирически (в самих свойствах <see cref="ReportPage"/>
+    /// порядок обратный), поэтому порядок здесь отличается от объявления свойств.
     /// </summary>
-    private static IEnumerable<BandBase> EnumerateBands(ReportPage page)
+    private static IEnumerable<BandBase> EnumerateTopFlowBands(ReportPage page, List<BandBase> pinnedToBottom)
     {
         if (page.ReportTitle != null) yield return page.ReportTitle;
         if (page.PageHeader != null) yield return page.PageHeader;
         if (page.ColumnHeader != null) yield return page.ColumnHeader;
         foreach (BandBase band in page.Bands)
             yield return band;
-        if (page.ReportSummary != null) yield return page.ReportSummary;
         if (page.ColumnFooter != null) yield return page.ColumnFooter;
-        if (page.PageFooter != null) yield return page.PageFooter;
-        if (page.Overlay != null) yield return page.Overlay;
+        if (page.ReportSummary is { } summary && !pinnedToBottom.Contains(summary))
+            yield return summary;
     }
 
     private static List<DesignObjectInfo> BuildObjects(BandBase band)

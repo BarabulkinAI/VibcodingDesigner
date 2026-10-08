@@ -191,6 +191,11 @@ public class FastReportService : IFastReportService
         AddBand(BandKind.Data, 2f);
         AddBand(BandKind.PageFooter, 2f);
         AddBand(BandKind.ReportSummary, 2f);
+        // По умолчанию ReportSummary печатается сразу после данных (подтверждено эмпирически
+        // побайтовым анализом PNG), а не внизу страницы. PageFooter реальный движок и так всегда
+        // прижимает к низу листа — PrintOnBottom у него не нужен. DesignSnapshotBuilder.BuildPage
+        // повторяет это же правило при построении снимка канваса.
+        page.ReportSummary!.PrintOnBottom = true;
         return page.Name;
     }
 

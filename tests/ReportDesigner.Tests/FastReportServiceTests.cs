@@ -31,17 +31,35 @@ public class FastReportServiceTests
     }
 
     [Fact]
-    public void CreateNew_BandTopsAreCumulative()
+    public void CreateNew_TopFlowBandTopsAreCumulative()
     {
         var service = new FastReportService();
         service.CreateNew();
 
-        var snapshot = service.GetSnapshot();
-        var bands = snapshot.Pages[0].Bands;
-
-        // Каждая следующая полоса начинается с суммы высот предыдущих.
-        for (var i = 1; i < bands.Count; i++)
+        // ReportTitle/PageHeader/Data идут обычным потоком сверху вниз: каждая следующая
+        // начинается с суммы высот предыдущих.
+        var bands = service.GetSnapshot().Pages[0].Bands;
+        for (var i = 1; i < 3; i++)
             Assert.Equal(bands[i - 1].Top + bands[i - 1].Height, bands[i].Top, 1);
+    }
+
+    [Fact]
+    public void CreateNew_ReportSummaryAndPageFooter_ArePinnedToBottomOfPage()
+    {
+        // ReportSummary у новых страниц печатается с PrintOnBottom=true (как и PageFooter —
+        // всегда прижат к низу у реального движка), поэтому обе полосы стоят вплотную друг к
+        // другу у самого низа листа, а не сразу под Data — см. docs/ARCHITECTURE.md, «Бэклог».
+        var service = new FastReportService();
+        service.CreateNew();
+
+        var page = service.GetSnapshot().Pages[0];
+        var data = page.Bands.Single(b => b.Kind == BandKind.Data);
+        var reportSummary = page.Bands.Single(b => b.Kind == BandKind.ReportSummary);
+        var pageFooter = page.Bands.Single(b => b.Kind == BandKind.PageFooter);
+
+        Assert.True(reportSummary.Top > data.Top + data.Height); // есть зазор — страница большая, полосы не вплотную к данным
+        Assert.Equal(reportSummary.Top + reportSummary.Height, pageFooter.Top, 1); // вплотную друг к другу
+        Assert.Equal(page.Height, pageFooter.Top + pageFooter.Height, 1); // PageFooter у самого низа листа
     }
 
     [Fact]
